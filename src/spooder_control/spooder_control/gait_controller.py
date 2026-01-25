@@ -24,7 +24,7 @@ class GaitController(Node):
         
       
         self.phase = 0.0
-        self.gait_speed = 3.0 
+        self.gait_speed = 6.0 
         
 
         self.body_length = 0.50
