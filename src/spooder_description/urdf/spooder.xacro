@@ -1,0 +1,244 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="spooder">
+  <xacro:arg name="config_file" default=""/>
+
+  <!-- Properties -->
+  <xacro:property name="body_length" value="0.50"/>
+  <xacro:property name="body_width" value="0.80"/>
+  <xacro:property name="body_height" value="0.10"/>
+  <xacro:property name="coxa_length" value="0.05"/>
+  <xacro:property name="femur_length" value="0.15"/>
+  <xacro:property name="tibia_length" value="0.25"/>
+
+  <!-- Include Camera -->
+  <xacro:include filename="$(find spooder_description)/urdf/camera.xacro"/>
+  
+  <!-- Include LiDAR -->
+  <xacro:include filename="$(find spooder_description)/urdf/lidar.xacro"/>
+
+  <!-- Include IMU -->
+  <xacro:include filename="$(find spooder_description)/urdf/imu.xacro"/>
+
+  <!-- Base Link -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+      <material name="grey">
+        <color rgba="0.5 0.5 0.5 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  
+  <gazebo reference="base_link">
+    <material>Gazebo/Grey</material>
+    <self_collide>false</self_collide>
+  </gazebo>
+  
+  <link name="base_footprint"/>
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${tibia_length + 0.05}" rpy="0 0 0"/> 
+  </joint>
+
+  <!-- Leg Macro -->
+  <xacro:macro name="leg" params="prefix side_sign x_offset y_offset yaw">
+    
+    <!-- Coxa -->
+    <joint name="${prefix}_coxa_joint" type="revolute">
+      <parent link="base_link"/>
+      <child link="${prefix}_coxa_link"/>
+      <origin xyz="${x_offset} ${y_offset} 0" rpy="0 0 ${yaw}"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-0.7" upper="0.7" effort="100" velocity="10"/>
+      <dynamics damping="0.1" friction="0.1"/>
+    </joint>
+
+    <link name="${prefix}_coxa_link">
+      <visual>
+        <geometry>
+          <box size="${coxa_length} 0.04 0.04"/>
+        </geometry>
+        <origin xyz="${coxa_length/2} 0 0"/>
+        <material name="blue">
+           <color rgba="0 0 1 1"/>
+        </material>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="${coxa_length} 0.04 0.04"/>
+        </geometry>
+        <origin xyz="${coxa_length/2} 0 0"/>
+      </collision>
+      <inertial>
+        <mass value="0.2"/>
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+      </inertial>
+    </link>
+
+    <gazebo reference="${prefix}_coxa_link">
+      <self_collide>false</self_collide>
+    </gazebo>
+
+    <!-- Femur -->
+    <joint name="${prefix}_femur_joint" type="revolute">
+      <parent link="${prefix}_coxa_link"/>
+      <child link="${prefix}_femur_link"/>
+      <origin xyz="${coxa_length} 0 0" rpy="1.5708 0 0"/> <!-- Positive Z axis is now robot Y -->
+      <axis xyz="0 0 1"/> 
+      <limit lower="-1.5" upper="1.5" effort="100" velocity="10"/>
+      <dynamics damping="0.1" friction="0.1"/>
+    </joint>
+
+    <link name="${prefix}_femur_link">
+      <visual>
+        <geometry>
+          <cylinder radius="0.02" length="${femur_length}"/>
+        </geometry>
+        <origin xyz="${femur_length/2} 0 0" rpy="0 1.5708 0"/>
+        <material name="red">
+          <color rgba="1 0 0 1"/>
+        </material>
+      </visual>
+      <collision>
+         <geometry>
+          <cylinder radius="0.02" length="${femur_length}"/>
+        </geometry>
+         <origin xyz="${femur_length/2} 0 0" rpy="0 1.5708 0"/>
+      </collision>
+      <inertial>
+        <mass value="0.3"/>
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+      </inertial>
+    </link>
+
+    <gazebo reference="${prefix}_femur_link">
+      <self_collide>false</self_collide>
+    </gazebo>
+
+    <!-- Tibia -->
+    <joint name="${prefix}_tibia_joint" type="revolute">
+      <parent link="${prefix}_femur_link"/>
+      <child link="${prefix}_tibia_link"/>
+      <origin xyz="${femur_length} 0 0" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-2.5" upper="0.5" effort="100" velocity="10"/> <!-- Tibia bends down/in with negative values now? Wait. -->
+      <dynamics damping="0.1" friction="0.1"/>
+    </joint>
+
+    <link name="${prefix}_tibia_link">
+       <visual>
+        <geometry>
+          <cylinder radius="0.015" length="${tibia_length}"/>
+        </geometry>
+        <origin xyz="${tibia_length/2} 0 0" rpy="0 1.5708 0"/>
+        <material name="green">
+          <color rgba="0 1 0 1"/>
+        </material>
+      </visual>
+      <collision>
+        <geometry>
+          <cylinder radius="0.015" length="${tibia_length}"/>
+        </geometry>
+         <origin xyz="${tibia_length/2} 0 0" rpy="0 1.5708 0"/>
+      </collision>
+      <inertial>
+        <mass value="0.3"/>
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+      </inertial>
+    </link>
+      
+      <!-- Contact Surface for Tibia tip -->
+      <gazebo reference="${prefix}_tibia_link">
+        <self_collide>false</self_collide>
+        <mu1>1.0</mu1>
+        <mu2>1.0</mu2>
+        <kp>100000.0</kp>
+        <kd>10.0</kd>
+      </gazebo>
+  </xacro:macro>
+
+  <!-- Instantiate Legs (6 Legs) -->
+  <!-- R: Right, L: Left | F: Front, M: Middle, R: Rear -->
+  <!-- Right Side -->
+  <xacro:leg prefix="rf" side_sign="-1" x_offset="0.05"  y_offset="-${body_width/2}" yaw="-0.7853"/>
+  <xacro:leg prefix="rm" side_sign="-1" x_offset="-0.10" y_offset="-${body_width/2}" yaw="-1.5708"/>
+  <xacro:leg prefix="rr" side_sign="-1" x_offset="-0.25" y_offset="-${body_width/2}" yaw="-2.3561"/>
+  
+  <!-- Left Side -->
+  <xacro:leg prefix="lf" side_sign="1"  x_offset="0.05"  y_offset="${body_width/2}"  yaw="0.7853"/>
+  <xacro:leg prefix="lm" side_sign="1"  x_offset="-0.10" y_offset="${body_width/2}"  yaw="1.5708"/>
+  <xacro:leg prefix="lr" side_sign="1"  x_offset="-0.25" y_offset="${body_width/2}"  yaw="2.3561"/>
+
+  <!-- Depth Camera (Center-front, high enough to miss the 0.80m wide base edges) -->
+  <xacro:depth_camera parent_link="base_link" origin_xyz="0.25 0 0.25" origin_rpy="0 0 0"/>
+
+  <!-- ros2_control -->
+  <ros2_control name="SpooderSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    
+    <xacro:macro name="leg_control" params="prefix">
+      <joint name="${prefix}_coxa_joint">
+          <command_interface name="position"/>
+          <state_interface name="position"/>
+          <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}_femur_joint">
+          <command_interface name="position"/>
+          <state_interface name="position"/>
+          <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}_tibia_joint">
+          <command_interface name="position"/>
+          <state_interface name="position"/>
+          <state_interface name="velocity"/>
+      </joint>
+    </xacro:macro>
+
+    <xacro:leg_control prefix="rf"/>
+    <xacro:leg_control prefix="rm"/>
+    <xacro:leg_control prefix="rr"/>
+    <xacro:leg_control prefix="lf"/>
+    <xacro:leg_control prefix="lm"/>
+    <xacro:leg_control prefix="lr"/>
+    
+  </ros2_control>
+
+  <gazebo>
+      <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(arg config_file)</parameters>
+      </plugin>
+      
+      <!-- Official Odometry Publisher Plugin -->
+      <plugin filename="libgz-sim-odometry-publisher-system.so" name="gz::sim::systems::OdometryPublisher">
+        <odom_topic>/odom</odom_topic>
+        <tf_topic>/tf</tf_topic>
+        <frame_id>odom</frame_id>
+        <child_frame_id>base_footprint</child_frame_id>
+        <odom_publish_frequency>50</odom_publish_frequency>
+        <xyz_offset>0 0 0</xyz_offset>
+        <rpy_offset>0 0 0</rpy_offset>
+        <gaussian_noise>0.001</gaussian_noise>
+      </plugin>
+  </gazebo>
+
+  <!-- Instantiate LiDAR Sensor -->
+  <xacro:lidar_sensor parent="base_link"/>
+
+  <!-- Instantiate IMU Sensor -->
+  <xacro:imu_sensor parent_link="base_link"/>
+
+</robot>

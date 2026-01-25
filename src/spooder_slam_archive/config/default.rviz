@@ -1,0 +1,108 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /RobotModel1
+        - /TF1
+        - /PointCloud21
+      Splitter Ratio: 0.5
+    Tree Height: 557
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Tool Properties
+    Name: Tool Properties
+    Expanded:
+      - /2D Goal Pose1
+      - /Publish Point1
+    Splitter Ratio: 0.5886790156364441
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 160
+      Enabled: true
+      Name: Grid
+    - Class: rviz_default_plugins/RobotModel
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+      Enabled: true
+      Name: RobotModel
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+    - Class: rviz_default_plugins/PointCloud2
+      Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: RGB8
+      Enabled: true
+      Name: PointCloud2
+      Queue Size: 10
+      Size (Pixels): 3
+      Topic:
+        Reliability Policy: Best Effort
+        Value: /rtabmap/cloud_map
+    - Class: rviz_default_plugins/Map
+      Alpha: 0.7
+      Class: rviz_default_plugins/Map
+      Enabled: true
+      Name: Map
+      Topic:
+        Value: /map
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base_footprint
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+    - Class: rviz_default_plugins/PublishPoint
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 6
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Name: Current View
+      Pitch: 0.785
+      Target Frame: <Fixed Frame>
+      Yaw: 0.785
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 846
+  Selection:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1200
+  X: 0
+  Y: 0

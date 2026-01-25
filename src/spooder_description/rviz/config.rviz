@@ -1,0 +1,89 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /RobotModel1
+        - /Map1
+        - /LaserScan1
+      Splitter Ratio: 0.5
+    Tree Height: 557
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Name: Grid
+    - Alpha: 0.6
+      Class: rviz_default_plugins/RobotModel
+      Description Topic:
+        Value: /robot_description
+      Enabled: true
+      Name: RobotModel
+      Visual Enabled: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Name: TF
+      Marker Scale: 0.3
+    - Class: rviz_default_plugins/Map
+      Enabled: true
+      Name: Map
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Value: /map
+      Update Topic:
+        Value: /map_updates
+    - Class: rviz_default_plugins/LaserScan
+      Enabled: true
+      Name: LaserScan
+      Topic:
+        Depth: 5
+        Reliability Policy: Reliable
+        Value: /scan
+      Size (Pixels): 3
+    - Class: rviz_default_plugins/Map
+      Enabled: true
+      Name: Global Costmap
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Value: /global_costmap/costmap
+    - Class: rviz_default_plugins/Map
+      Enabled: true
+      Name: Local Costmap
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Value: /local_costmap/costmap
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: map
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic: /goal_pose
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)

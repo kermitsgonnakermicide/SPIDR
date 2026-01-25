@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="lidar_sensor" params="parent">
+    
+    <!-- LiDAR Link -->
+    <link name="lidar_link">
+      <visual>
+        <geometry>
+          <cylinder radius="0.05" length="0.07"/>
+        </geometry>
+        <material name="lidar_black">
+          <color rgba="0.1 0.1 0.1 1"/>
+        </material>
+      </visual>
+      <collision>
+        <geometry>
+          <cylinder radius="0.05" length="0.07"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.125"/>
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+      </inertial>
+    </link>
+
+    <!-- Joint connecting LiDAR to parent (base_link) -->
+    <joint name="lidar_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="lidar_link"/>
+      <!-- High mount: 0.35m above base_link to avoid leg occlusion -->
+      <origin xyz="0 0 0.35" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Visual Mount (Stand) -->
+    <joint name="lidar_mount_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="lidar_mount"/>
+      <origin xyz="0 0 0.175" rpy="0 0 0"/> <!-- Halfway up -->
+    </joint>
+
+    <link name="lidar_mount">
+      <visual>
+        <geometry>
+          <cylinder radius="0.02" length="0.35"/>
+        </geometry>
+        <material name="grey">
+          <color rgba="0.5 0.5 0.5 1"/>
+        </material>
+      </visual>
+      <collision>
+         <geometry>
+          <cylinder radius="0.02" length="0.35"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Gazebo LiDAR Sensor Plugin -->
+    <gazebo reference="lidar_link">
+      <sensor name="lidar_sensor" type="gpu_lidar">
+        <topic>/scan</topic>
+        <gz_frame_id>spooder/lidar_link</gz_frame_id>
+        <update_rate>10</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159</min_angle>
+              <max_angle>3.14159</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.12</min>
+            <max>10.0</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </lidar>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+
+</robot>
