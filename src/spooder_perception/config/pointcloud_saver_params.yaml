@@ -1,0 +1,17 @@
+pointcloud_saver:
+  ros__parameters:
+    # Voxel grid resolution for downsampling (meters)
+    voxel_size: 0.02
+    
+    # Maximum number of points to store in memory
+    max_points: 1000000
+    
+    # Auto-save interval in seconds (0 = disabled)
+    # Set to 60.0 for automatic saves every minute
+    auto_save_interval: 0.0
+    
+    # Directory to save PCD files
+    output_directory: "~/spooder_maps"
+    
+    # Target frame for accumulated point cloud
+    map_frame: "map"

@@ -37,6 +37,28 @@ amcl:
     z_rand: 0.5
     z_short: 0.05
     scan_topic: scan
+behavior_server:
+  ros__parameters:
+    use_sim_time: True
+    local_frame: spooder/odom
+    global_frame: map
+    robot_base_frame: spooder/base_footprint
+    transform_tolerance: 0.1
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
+    wait:
+      plugin: "nav2_behaviors::Wait"
+    cycle_frequency: 10.0
+    # Fix behaviors looking for 'odom' instead of 'spooder/odom'
+    spin:
+      plugin: "nav2_behaviors::Spin"
+      local_frame: spooder/odom
+    backup:
+      plugin: "nav2_behaviors::BackUp"
+      local_frame: spooder/odom
+    drive_on_heading:
+      plugin: "nav2_behaviors::DriveOnHeading"
+      local_frame: spooder/odom
+    odom_topic: /odom
 
 bt_navigator:
   ros__parameters:
@@ -44,6 +66,7 @@ bt_navigator:
     global_frame: map
     robot_base_frame: spooder/base_footprint
     odom_topic: /odom
+    local_frame: spooder/odom
     bt_loop_duration: 10
     default_server_timeout: 20
     default_bt_xml_filename: "navigate_to_pose_w_replanning_and_recovery.xml"
@@ -104,8 +127,8 @@ controller_server:
     # Progress Checker
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+      required_movement_radius: 0.1
+      movement_time_allowance: 15.0
     # Goal Checker
     general_goal_checker:
       stateful: True
@@ -168,22 +191,50 @@ planner_server:
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 1.0
-      publish_frequency: 1.0
+      update_frequency: 2.0  # Increased from 1.0 for faster dynamic response
+      publish_frequency: 2.0  # Increased from 1.0
       global_frame: map
       robot_base_frame: spooder/base_footprint
       use_sim_time: True
+      controller_frequency: 15.0  # Increased from 10.0 for better reactivity
       robot_radius: 0.5 # Fallback radius
       resolution: 0.05
       rolling_window: false
       track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "voxel_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
         enabled: True
         subscribe_to_updates: True
         transform_tolerance: 0.1
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: scan camera_pointcloud
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+        camera_pointcloud:
+          topic: /camera/points
+          data_type: "PointCloud2"
+          min_obstacle_height: 0.16
+          max_obstacle_height: 2.0
+          obstacle_max_range: 5.0
+          obstacle_min_range: 0.1
+          raytrace_max_range: 6.0
+          raytrace_min_range: 0.0
+          clearing: True
+          marking: True
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -196,18 +247,19 @@ global_costmap:
           data_type: "LaserScan"
           raytrace_max_range: 3.0
           raytrace_min_range: 0.0
+          min_obstacle_height: 0.16
           obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
+          obstacle_min_range: 0.1
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.3
       always_send_full_costmap: True
 
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
+      update_frequency: 8.0  # Increased from 5.0 for faster dynamic response
       publish_frequency: 2.0
       global_frame: spooder/odom
       robot_base_frame: spooder/base_footprint
@@ -228,17 +280,28 @@ local_costmap:
         z_voxels: 16
         max_obstacle_height: 2.0
         mark_threshold: 0
-        observation_sources: scan
+        observation_sources: scan camera_pointcloud
         scan:
           topic: /scan
           max_obstacle_height: 2.0
           clearing: True
           marking: True
           data_type: "LaserScan"
+        camera_pointcloud:
+          topic: /camera/points
+          data_type: "PointCloud2"
+          min_obstacle_height: 0.16
+          max_obstacle_height: 2.0
+          obstacle_max_range: 5.0
+          obstacle_min_range: 0.1
+          raytrace_max_range: 6.0
+          raytrace_min_range: 0.0
+          clearing: True
+          marking: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.3
       always_send_full_costmap: True
 
 collision_monitor:
@@ -247,9 +310,9 @@ collision_monitor:
     base_frame_id: "spooder/base_footprint"
     odom_frame_id: "spooder/odom"
     transform_tolerance: 0.1
-    source_timeout: 0.1
+    source_timeout: 0.5 # Increased from 0.1 to handle simulation lag
     base_shift_correction: True
-    observation_sources: ["scan"]
+    observation_sources: ["scan"]  # Removed camera_pointcloud due to timestamp lag
     polygons: ["Footprint"]
     Footprint:
       type: "polygon"
@@ -257,9 +320,16 @@ collision_monitor:
       points: "[[0.4, 0.25], [0.4, -0.25], [-0.4, -0.25], [-0.4, 0.25]]"
       action_type: "slowdown"
       slowdown_ratio: 0.5
+      min_height: 0.16
+      max_height: 2.0
     scan:
       type: "scan"
       topic: "/scan"
+    camera_pointcloud:
+      type: "pointcloud"
+      topic: "/camera/points"
+      min_height: 0.16
+      max_height: 2.0
 
 docking_server:
   ros__parameters:
@@ -270,4 +340,24 @@ docking_server:
       plugin: "opennav_docking::SimpleChargingDock"
       docking_threshold: 0.1
       staging_timeout: 300.0
+
+
+unstuck_monitor:
+  ros__parameters:
+    use_sim_time: True
+    
+    # Time threshold for considering robot stuck (seconds)
+    stuck_timeout: 8.0
+    
+    # Minimum velocity to consider robot moving (m/s)
+    min_velocity_threshold: 0.01
+    
+    # Maximum radius for oscillation detection (meters)
+    oscillation_radius: 0.15
+    
+    # Maximum time allowed for recovery behaviors (seconds)
+    recovery_timeout: 30.0
+    
+    # Number of position samples to track for oscillation detection
+    position_history_size: 50
 

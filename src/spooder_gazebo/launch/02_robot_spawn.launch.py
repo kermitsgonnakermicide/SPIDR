@@ -31,14 +31,23 @@ def generate_launch_description():
         }]
     )
 
+
+    # Spawn position parameters
+    spawn_x = LaunchConfiguration('spawn_x', default='0.0')
+    spawn_y = LaunchConfiguration('spawn_y', default='0.0')
+    spawn_z = LaunchConfiguration('spawn_z', default='0.1')
+    spawn_yaw = LaunchConfiguration('spawn_yaw', default='0.0')
+
     # 2. Spawn Entity (Injects model into Gazebo)
     spawn_entity = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-topic', 'robot_description', '-name', 'spooder', '-z', '0.5'],
+        arguments=['-topic', 'robot_description', '-name', 'spooder', 
+                   '-x', spawn_x, '-y', spawn_y, '-z', spawn_z, '-Y', spawn_yaw],
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}]
     )
+
 
     # 3. Controllers
     # These depend on the Gazebo plugin loading the model first. 
@@ -96,6 +105,6 @@ def generate_launch_description():
         TimerAction(period=7.0, actions=[controller]),
         
         # Start Logic
-        TimerAction(period=10.0, actions=[ekf]),
-        TimerAction(period=12.0, actions=[gait_controller]),
+        TimerAction(period=12.0, actions=[ekf]),
+        TimerAction(period=15.0, actions=[gait_controller]),
     ])

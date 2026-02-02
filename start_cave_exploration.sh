@@ -1,4 +1,5 @@
 #!/bin/bash
+# Start SPIDR in Cave Environment
 source /opt/ros/jazzy/setup.bash
 if [ -f "install/setup.bash" ]; then
     source install/setup.bash
@@ -17,10 +18,12 @@ source install/setup.bash
 
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-ros2 launch spooder_gazebo 01_sim_world.launch.py &
+# Launch cave world instead of test_world
+ros2 launch spooder_gazebo 01_sim_world.launch.py world:=cave_world &
 sleep 5
 
-ros2 launch spooder_gazebo 02_robot_spawn.launch.py &
+# Spawn robot at cave entrance (adjusted position)
+ros2 launch spooder_gazebo 02_robot_spawn.launch.py spawn_x:=0.0 spawn_y:=2.0 &
 sleep 10 # Wait for spawner and EKF to stabilize
 
 ros2 launch spooder_navigation slam.launch.py &

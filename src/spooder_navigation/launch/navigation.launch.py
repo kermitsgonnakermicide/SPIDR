@@ -30,6 +30,15 @@ def generate_launch_description():
         }.items()
     )
 
+    # Unstuck Monitor Node
+    unstuck_monitor_node = Node(
+        package='spooder_navigation',
+        executable='unstuck_monitor',
+        name='unstuck_monitor',
+        output='screen',
+        parameters=[params_file],
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time', 
@@ -40,5 +49,6 @@ def generate_launch_description():
             default_value=os.path.join(pkg_spooder_navigation, 'config', 'nav2_params.yaml'),
             description='Full path to the ROS2 parameters file to use for all launched nodes'),
         
-        nav2_launch
+        nav2_launch,
+        unstuck_monitor_node,
     ])

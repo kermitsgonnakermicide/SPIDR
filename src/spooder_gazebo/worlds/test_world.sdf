@@ -33,9 +33,9 @@
       </link>
     </model>
 
-    <!-- NEW OBSTACLE COURSE -->
+    <!-- OBSTACLE COURSE WITH 3D ELEMENTS -->
     
-    <!-- Entry Pillars -->
+    <!-- Entry Pillars (1.5m gap - visible to LiDAR) -->
     <model name="pillar_left">
       <pose>2 1.5 0.5 0 0 0</pose>
       <static>true</static>
@@ -56,9 +56,119 @@
       </link>
     </model>
 
-    <!-- Mid-Field Scatter -->
+    <!-- LOW BARRIER - 0.15m high (robot should clear, camera should see) -->
+    <model name="low_barrier">
+      <pose>3 0 0.075 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.1 2.0 0.15</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 2.0 0.15</size></box></geometry>
+        <material><ambient>0.9 0.7 0.1 1</ambient><diffuse>0.9 0.7 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- TABLE - 0.6m high platform (camera height - should detect top surface) -->
+    <model name="table">
+      <pose>5 1.5 0.3 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <!-- Table top -->
+        <collision name="top">
+          <pose>0 0 0.3 0 0 0</pose>
+          <geometry><box><size>1.2 0.8 0.05</size></box></geometry>
+        </collision>
+        <visual name="top_visual">
+          <pose>0 0 0.3 0 0 0</pose>
+          <geometry><box><size>1.2 0.8 0.05</size></box></geometry>
+          <material><ambient>0.6 0.4 0.2 1</ambient><diffuse>0.6 0.4 0.2 1</diffuse></material>
+        </visual>
+        <!-- Leg 1 -->
+        <collision name="leg1"><pose>0.5 0.35 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.04</radius><length>0.6</length></cylinder></geometry>
+        </collision>
+        <visual name="leg1_visual"><pose>0.5 0.35 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.04</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>0.4 0.3 0.15 1</ambient><diffuse>0.4 0.3 0.15 1</diffuse></material>
+        </visual>
+        <!-- Leg 2 -->
+        <collision name="leg2"><pose>0.5 -0.35 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.04</radius><length>0.6</length></cylinder></geometry>
+        </collision>
+        <visual name="leg2_visual"><pose>0.5 -0.35 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.04</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>0.4 0.3 0.15 1</ambient><diffuse>0.4 0.3 0.15 1</diffuse></material>
+        </visual>
+        <!-- Leg 3 -->
+        <collision name="leg3"><pose>-0.5 0.35 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.04</radius><length>0.6</length></cylinder></geometry>
+        </collision>
+        <visual name="leg3_visual"><pose>-0.5 0.35 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.04</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>0.4 0.3 0.15 1</ambient><diffuse>0.4 0.3 0.15 1</diffuse></material>
+        </visual>
+        <!-- Leg 4 -->
+        <collision name="leg4"><pose>-0.5 -0.35 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.04</radius><length>0.6</length></cylinder></geometry>
+        </collision>
+        <visual name="leg4_visual"><pose>-0.5 -0.35 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.04</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>0.4 0.3 0.15 1</ambient><diffuse>0.4 0.3 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- HANGING OBSTACLE - Suspended at 0.5m height (above LiDAR, visible to camera) -->
+    <model name="hanging_box">
+      <pose>7 0 0.7 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.4 0.4 0.4</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.4 0.4 0.4</size></box></geometry>
+        <material><ambient>0.8 0.1 0.1 1</ambient><diffuse>0.8 0.1 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ARCHWAY - Overhead structure (robot can pass under, camera sees top) -->
+    <model name="archway">
+      <pose>9 0 0 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <!-- Left post -->
+        <collision name="left_post">
+          <pose>0 1.2 0.75 0 0 0</pose>
+          <geometry><box><size>0.2 0.2 1.5</size></box></geometry>
+        </collision>
+        <visual name="left_post_visual">
+          <pose>0 1.2 0.75 0 0 0</pose>
+          <geometry><box><size>0.2 0.2 1.5</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+        <!-- Right post -->
+        <collision name="right_post">
+          <pose>0 -1.2 0.75 0 0 0</pose>
+          <geometry><box><size>0.2 0.2 1.5</size></box></geometry>
+        </collision>
+        <visual name="right_post_visual">
+          <pose>0 -1.2 0.75 0 0 0</pose>
+          <geometry><box><size>0.2 0.2 1.5</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+        <!-- Top beam -->
+        <collision name="top_beam">
+          <pose>0 0 1.5 0 0 0</pose>
+          <geometry><box><size>0.2 2.6 0.2</size></box></geometry>
+        </collision>
+        <visual name="top_beam_visual">
+          <pose>0 0 1.5 0 0 0</pose>
+          <geometry><box><size>0.2 2.6 0.2</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- SCATTERED OBSTACLES -->
     <model name="scatter_1">
-      <pose>4 0 0.5 0 0 0</pose>
+      <pose>4 -2 0.5 0 0 0</pose>
       <static>true</static>
       <link name="link">
         <collision name="c"><geometry><cylinder><radius>0.3</radius><length>1</length></cylinder></geometry></collision>
@@ -67,48 +177,7 @@
       </link>
     </model>
 
-    <model name="scatter_2">
-      <pose>5 2.5 0.5 0 0 0</pose>
-      <static>true</static>
-      <link name="link">
-        <collision name="c"><geometry><box><size>0.8 0.2 1</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.8 0.2 1</size></box></geometry>
-        <material><ambient>0.2 0.2 0.7 1</ambient><diffuse>0.2 0.2 0.7 1</diffuse></material></visual>
-      </link>
-    </model>
-
-    <model name="scatter_3">
-      <pose>5 -2.5 0.5 0 0 0</pose>
-      <static>true</static>
-      <link name="link">
-        <collision name="c"><geometry><box><size>0.8 0.2 1</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.8 0.2 1</size></box></geometry>
-        <material><ambient>0.2 0.2 0.7 1</ambient><diffuse>0.2 0.2 0.7 1</diffuse></material></visual>
-      </link>
-    </model>
-
-    <!-- The "L-Wall" Room -->
-    <model name="wall_short">
-      <pose>7 1 0.5 0 0 0</pose>
-      <static>true</static>
-      <link name="link">
-        <collision name="c"><geometry><box><size>0.1 3.0 1</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.1 3.0 1</size></box></geometry>
-        <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
-      </link>
-    </model>
-
-    <model name="wall_long">
-      <pose>8.5 2.5 0.5 0 0 1.57</pose>
-      <static>true</static>
-      <link name="link">
-        <collision name="c"><geometry><box><size>0.1 3.0 1</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.1 3.0 1</size></box></geometry>
-        <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
-      </link>
-    </model>
-
-    <!-- High Feature Pillar -->
+    <!-- High Feature Tower (for SLAM) -->
     <model name="tower">
       <pose>10 0 2 0 0 0</pose>
       <static>true</static>

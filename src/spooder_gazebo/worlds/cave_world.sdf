@@ -1,0 +1,427 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="cave_world">
+    
+    <!-- Physics -->
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    
+    <!-- Plugin for physics -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"></plugin>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"></plugin>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"></plugin>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    
+    <!-- Atmospheric lighting (low for cave ambiance) -->
+    <scene>
+      <ambient>0.15 0.12 0.1</ambient>
+      <background>0.05 0.05 0.05</background>
+      <shadows>true</shadows>
+    </scene>
+    
+    <!-- Sun (dim, for cave entrance) -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 15 0 0 0</pose>
+      <diffuse>0.3 0.25 0.2 1</diffuse>
+      <specular>0.2 0.15 0.1 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.3 0.1 -0.9</direction>
+    </light>
+    
+    <!-- Cave spotlights for visibility -->
+    <light type="spot" name="cave_light_1">
+      <pose>5 0 3 0 0.5 0</pose>
+      <diffuse>0.8 0.7 0.5 1</diffuse>
+      <specular>0.5 0.4 0.3 1</specular>
+      <spot>
+        <inner_angle>0.6</inner_angle>
+        <outer_angle>1.0</outer_angle>
+        <falloff>1</falloff>
+      </spot>
+      <attenuation>
+        <range>30</range>
+        <constant>0.3</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    
+    <light type="spot" name="cave_light_2">
+      <pose>-5 8 3 0 0.5 3.14</pose>
+      <diffuse>0.8 0.7 0.5 1</diffuse>
+      <specular>0.5 0.4 0.3 1</specular>
+      <spot>
+        <inner_angle>0.6</inner_angle>
+        <outer_angle>1.0</outer_angle>
+        <falloff>1</falloff>
+      </spot>
+      <attenuation>
+        <range>30</range>
+        <constant>0.3</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    
+    <light type="point" name="ambient_light_deep">
+      <pose>0 15 4 0 0 0</pose>
+      <diffuse>0.4 0.35 0.25 1</diffuse>
+      <specular>0.2 0.15 0.1 1</specular>
+      <attenuation>
+        <range>40</range>
+        <constant>0.4</constant>
+        <linear>0.02</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <cast_shadows>false</cast_shadows>
+    </light>
+    
+    <!-- Ground plane (cave floor - rough texture) -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+            </plane>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>0.8</mu>
+                <mu2>0.8</mu2>
+              </ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.3 0.25 0.2 1</ambient>
+            <diffuse>0.4 0.35 0.28 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Cave walls - creating tunnel effect -->
+    <!-- Left wall -->
+    <model name="cave_wall_left">
+      <static>true</static>
+      <pose>-4 10 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1 25 3</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>1 25 3</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.25 0.2 0.15 1</ambient>
+            <diffuse>0.35 0.28 0.22 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Right wall -->
+    <model name="cave_wall_right">
+      <static>true</static>
+      <pose>4 10 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1 25 3</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>1 25 3</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.25 0.2 0.15 1</ambient>
+            <diffuse>0.35 0.28 0.22 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Ceiling -->
+    <model name="cave_ceiling">
+      <static>true</static>
+      <pose>0 10 3.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>9 25 0.5</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>9 25 0.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.2 0.15 0.12 1</ambient>
+            <diffuse>0.3 0.22 0.18 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Cave obstacles - stalactites/stalagmites -->
+    <model name="stalagmite_1">
+      <static>true</static>
+      <pose>2 5 0 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <cylinder>
+              <radius>0.3</radius>
+              <length>1.2</length>
+            </cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.3</radius>
+              <length>1.2</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.3 0.25 0.2 1</ambient>
+            <diffuse>0.4 0.32 0.25 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <model name="stalagmite_2">
+      <static>true</static>
+      <pose>-2 12 0 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <cylinder>
+              <radius>0.25</radius>
+              <length>0.9</length>
+            </cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.25</radius>
+              <length>0.9</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.3 0.25 0.2 1</ambient>
+            <diffuse>0.4 0.32 0.25 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <model name="stalagmite_3">
+      <static>true</static>
+      <pose>1 18 0 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <cylinder>
+              <radius>0.35</radius>
+              <length>1.5</length>
+            </cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.35</radius>
+              <length>1.5</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.3 0.25 0.2 1</ambient>
+            <diffuse>0.4 0.32 0.25 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Boulder obstacles -->
+    <model name="boulder_1">
+      <static>true</static>
+      <pose>-1.5 8 0.4 0 0 0.5</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <sphere>
+              <radius>0.4</radius>
+            </sphere>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <sphere>
+              <radius>0.4</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <ambient>0.28 0.23 0.18 1</ambient>
+            <diffuse>0.38 0.3 0.24 1</diffuse>
+            <specular>0.15 0.15 0.15 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <model name="boulder_2">
+      <static>true</static>
+      <pose>2.5 15 0.5 0 0 1.2</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <sphere>
+              <radius>0.5</radius>
+            </sphere>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <sphere>
+              <radius>0.5</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <ambient>0.28 0.23 0.18 1</ambient>
+            <diffuse>0.38 0.3 0.24 1</diffuse>
+            <specular>0.15 0.15 0.15 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Rock formations for variety -->
+    <model name="rock_cluster_1">
+      <static>true</static>
+      <pose>0 10 0.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.6 0.8 0.4</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.6 0.8 0.4</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.25 0.2 0.16 1</ambient>
+            <diffuse>0.35 0.27 0.22 1</diffuse>
+            <specular>0.12 0.12 0.12 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Narrow passage challenge -->
+    <model name="narrow_left">
+      <static>true</static>
+      <pose>-1.2 20 0.3 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.5 2 0.6</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.5 2 0.6</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.3 0.24 0.19 1</ambient>
+            <diffuse>0.4 0.31 0.25 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <model name="narrow_right">
+      <static>true</static>
+      <pose>1.2 20 0.3 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.5 2 0.6</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.5 2 0.6</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.3 0.24 0.19 1</ambient>
+            <diffuse>0.4 0.31 0.25 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+  </world>
+</sdf>

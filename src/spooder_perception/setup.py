@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'spooder_navigation'
+package_name = 'spooder_perception'
 
 setup(
     name=package_name,
@@ -14,7 +14,6 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-        (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -29,7 +28,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'unstuck_monitor = spooder_navigation.unstuck_monitor:main',
+            'pointcloud_saver = spooder_perception.pointcloud_saver:main',
+            'terrain_analyzer = spooder_perception.terrain_analyzer:main'
         ],
     },
 )

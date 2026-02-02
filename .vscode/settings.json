@@ -1,3 +1,4 @@
 {
-    "ros.distro": "jazzy"
+    "ros.distro": "jazzy",
+    "cmake.sourceDirectory": "/home/daksh/spooder_ws/src/spooder_description"
 }
