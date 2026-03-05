@@ -62,6 +62,9 @@ class GaitController(Node):
         
         # 3D terrain tracking
         self.terrain_max_height = 0.0
+        self.current_body_lift = 0.0
+        self.target_body_lift = 0.0
+        self.body_lift_smooth_rate = 0.01  # Rate of body lift change per loop
         
     def terrain_height_callback(self, msg):
         """Update max terrain height detected by point cloud analyzer"""
@@ -116,26 +119,31 @@ class GaitController(Node):
             self.get_logger().info(f"First Heartbeat: Standing up at z={self.default_z}")
             self.first_run = False
             
-        # Adaptively adjust step height based on 3D terrain and laser scan
-        # Prioritize 3D terrain from point cloud
+        # Adaptively adjust step height AND body height based on 3D terrain
         if self.terrain_max_height > self.min_climbable_height:
-             target_step_height = min(self.elevated_step_height, self.terrain_max_height + 0.05) # Lift slightly above obstacle
+             target_step_height = min(self.elevated_step_height, self.terrain_max_height + 0.06) 
+             self.target_body_lift = min(0.15, self.terrain_max_height * 0.8) # Raise body to 80% of obstacle height
              self.obstacle_ahead = True
-        elif self.obstacle_ahead: # Fallback/Latcher if laser detected something but PC missed (less likely now)
-             target_step_height = self.elevated_step_height
         else:
              target_step_height = self.base_step_height
+             self.target_body_lift = 0.0
              self.obstacle_ahead = False
         
-        # Smooth transition
+        # Smooth step height transition
         if self.current_step_height < target_step_height:
             self.current_step_height = min(self.current_step_height + self.step_height_transition_rate, target_step_height)
         elif self.current_step_height > target_step_height:
             self.current_step_height = max(self.current_step_height - self.step_height_transition_rate, target_step_height)
+            
+        # Smooth body lift transition
+        if self.current_body_lift < self.target_body_lift:
+            self.current_body_lift = min(self.current_body_lift + self.body_lift_smooth_rate, self.target_body_lift)
+        elif self.current_body_lift > self.target_body_lift:
+            self.current_body_lift = max(self.current_body_lift - self.body_lift_smooth_rate, self.target_body_lift)
         
         if self.obstacle_ahead:
             self.get_logger().info(
-                f"Obstacle detected! Elevated step: {self.current_step_height:.3f}m",
+                f"3D Terrain: {self.terrain_max_height:.2f}m | Step: {self.current_step_height:.2f}m | Body Lift: {self.current_body_lift:.2f}m",
                 throttle_duration_sec=2.0
             )
             
@@ -168,10 +176,10 @@ class GaitController(Node):
             speed_turn = self.vel_yaw
             
             if abs(speed_linear) < 0.001 and abs(speed_turn) < 0.001:
-                 # Default Standing Pose
+                 # Default Standing Pose - Adapt to body lift
                  x_val = 0.25 
                  y_val = 0.0
-                 z_val = self.default_z # -0.15
+                 z_val = self.default_z - self.current_body_lift 
                  
                  t1, t2, t3 = self.ik.solve(x_val, y_val, z_val)
                  
@@ -201,7 +209,7 @@ class GaitController(Node):
             turn_off = -self.vel_yaw * 0.1 * cycle_val 
             y_off += turn_off
 
-            z_val = self.default_z # Stance height
+            z_val = self.default_z - self.current_body_lift # Adjust base height for chassis lift
             if math.sin(current_phase) > 0:
                  # Lift leg using adaptive step height
                  z_val += self.current_step_height * math.sin(current_phase)

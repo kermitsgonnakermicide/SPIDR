@@ -309,6 +309,15 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /plan
       Value: true
+    - Class: rviz_default_plugins/Polygon
+      Color: 255; 0; 0
+      Enabled: true
+      Name: Local Footprint
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        Value: /local_costmap/published_footprint
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -320,7 +329,7 @@ Visualization Manager:
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 255; 255
       Color Transformer: AxisColor
-      Decay Time: 86400
+      Decay Time: 1800
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
@@ -331,8 +340,8 @@ Visualization Manager:
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.001
-      Style: Points
+      Size (m): 1
+      Style: Boxes
       Topic:
         Depth: 5
         Durability Policy: Volatile
