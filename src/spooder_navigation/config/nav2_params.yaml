@@ -357,3 +357,9 @@ unstuck_monitor:
     # Number of position samples to track for oscillation detection
     position_history_size: 50
 
+    # Topics/actions used by the standalone recovery monitor
+    odom_topic: /odom
+    cmd_vel_topic: /cmd_vel
+    status_topic: /unstuck_monitor/status
+    spin_action: /spin
+    backup_action: /backup

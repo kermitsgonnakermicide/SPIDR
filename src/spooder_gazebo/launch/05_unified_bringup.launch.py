@@ -43,11 +43,6 @@ def generate_launch_description():
     )
 
     # 4. Controllers (Delayed)
-    load_joint_state_broadcaster = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 'joint_state_broadcaster', '-c', 'controller_manager'],
-        output='screen'
-    )
-
     load_spooder_controller = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 'spooder_controller', '-c', 'controller_manager'],
         output='screen'
@@ -116,7 +111,7 @@ def generate_launch_description():
         spawn_entity,
 
         # Layer 1: Controllers (After Spawn)
-        TimerAction(period=5.0, actions=[load_joint_state_broadcaster]),
+        # joint_state_broadcaster currently segfaults inside gz_ros2_control on activation.
         TimerAction(period=7.0, actions=[load_spooder_controller]),
         TimerAction(period=9.0, actions=[gait_controller]),
 

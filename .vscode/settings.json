@@ -1,4 +1,23 @@
 {
     "ros.distro": "jazzy",
-    "cmake.sourceDirectory": "/home/daksh/spooder_ws/src/spooder_description"
+    "cmake.sourceDirectory": "/home/daksh/spooder_ws/src/spooder_description",
+    "python.autoComplete.extraPaths": [
+        "/home/daksh/spooder_ws/build/spooder_perception",
+        "/home/daksh/spooder_ws/install/spooder_perception/lib/python3.12/site-packages",
+        "/home/daksh/spooder_ws/build/spooder_navigation",
+        "/home/daksh/spooder_ws/install/spooder_navigation/lib/python3.12/site-packages",
+        "/home/daksh/spooder_ws/build/spooder_control",
+        "/home/daksh/spooder_ws/install/spooder_control/lib/python3.12/site-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/daksh/spooder_ws/build/spooder_perception",
+        "/home/daksh/spooder_ws/install/spooder_perception/lib/python3.12/site-packages",
+        "/home/daksh/spooder_ws/build/spooder_navigation",
+        "/home/daksh/spooder_ws/install/spooder_navigation/lib/python3.12/site-packages",
+        "/home/daksh/spooder_ws/build/spooder_control",
+        "/home/daksh/spooder_ws/install/spooder_control/lib/python3.12/site-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ],
+    "ROS2.distro": "jazzy"
 }

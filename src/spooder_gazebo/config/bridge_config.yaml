@@ -1,11 +1,10 @@
-# This is a MINIMAL bridge config that WILL work with Gazebo Harmonic
-# The key fix: Using the world-scoped clock topic
+# Fallback bridge config for launch files that do not generate their own config.
+# 01_sim_world.launch.py writes a world-specific version at runtime.
 
 ---
-# CLOCK - This is the CRITICAL fix
-# Gazebo Harmonic publishes clock on /world/<world_name>/clock
+# CLOCK - default test_world fallback
 - ros_topic_name: "/clock"
-  gz_topic_name: "/world/cave_world/clock"
+  gz_topic_name: "/world/test_world/clock"
   ros_type_name: "rosgraph_msgs/msg/Clock"
   gz_type_name: "gz.msgs.Clock"
   direction: GZ_TO_ROS
@@ -37,13 +36,6 @@
   ros_type_name: "geometry_msgs/msg/Twist"
   gz_type_name: "gz.msgs.Twist"
   direction: ROS_TO_GZ
-
-# TF from Gazebo (odom -> base_footprint)
-- ros_topic_name: "/tf"
-  gz_topic_name: "/tf"
-  ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_type_name: "gz.msgs.Pose_V"
-  direction: GZ_TO_ROS
 
 # DEPTH CAMERA - RGB Image
 - ros_topic_name: "/camera/image"

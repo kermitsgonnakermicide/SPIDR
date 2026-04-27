@@ -5,12 +5,13 @@ Accumulates depth camera point clouds and exports to PCD format
 """
 
 import rclpy
+from rclpy.duration import Duration
+from rclpy.executors import ExternalShutdownException
+from rclpy.time import Time
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
 from std_srvs.srv import Trigger
-import sensor_msgs_py.point_cloud2 as pc2
 from tf2_ros import Buffer, TransformListener
-from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 import numpy as np
 import struct
 import os
@@ -34,7 +35,7 @@ class PointCloudSaver(Node):
         self.dist_threshold = self.get_parameter('dist_threshold').value
         self.max_points = self.get_parameter('max_points').value
         self.auto_save_interval = self.get_parameter('auto_save_interval').value
-        self.output_dir = self.get_parameter('output_directory').value
+        self.output_dir = os.path.expanduser(str(self.get_parameter('output_directory').value))
         self.map_frame = self.get_parameter('map_frame').value
         
         # Create output directory
@@ -87,24 +88,25 @@ class PointCloudSaver(Node):
     def pointcloud_callback(self, msg):
         """Accumulate point cloud data"""
         try:
-            # Transform to map frame
+            if not msg.header.frame_id:
+                self.get_logger().warn('Skipping point cloud with empty frame_id', throttle_duration_sec=5.0)
+                return
+
+            points, rgbs = self.pointcloud2_to_numpy(msg)
+            if points is None or len(points) == 0:
+                return
+
             if msg.header.frame_id != self.map_frame:
                 try:
-                    transform = self.tf_buffer.lookup_transform(
+                    transform = self.lookup_transform(
                         self.map_frame,
                         msg.header.frame_id,
-                        rclpy.time.Time(),
-                        timeout=rclpy.duration.Duration(seconds=0.5)
+                        msg.header.stamp
                     )
-                    msg = do_transform_cloud(msg, transform)
+                    points = self.transform_points(points, transform)
                 except Exception as e:
                     self.get_logger().warn(f'Transform failed: {e}', throttle_duration_sec=5.0)
                     return
-            
-            # Parse point cloud robustly
-            points, rgbs = self.pointcloud2_to_numpy(msg)
-            if points is None:
-                return
 
             points_added = 0
             for i in range(len(points)):
@@ -149,34 +151,94 @@ class PointCloudSaver(Node):
         except Exception as e:
             self.get_logger().error(f'Error processing point cloud: {e}')
 
+    def lookup_transform(self, target_frame, source_frame, stamp):
+        """Look up a transform, falling back to the latest TF if stamped TF lags."""
+        lookup_time = Time.from_msg(stamp)
+        try:
+            return self.tf_buffer.lookup_transform(
+                target_frame,
+                source_frame,
+                lookup_time,
+                timeout=Duration(seconds=0.2)
+            )
+        except Exception:
+            return self.tf_buffer.lookup_transform(
+                target_frame,
+                source_frame,
+                Time(),
+                timeout=Duration(seconds=0.2)
+            )
+
+    def transform_points(self, points, transform):
+        """Apply a TransformStamped to an Nx3 point array without native cloud helpers."""
+        translation = transform.transform.translation
+        rotation = transform.transform.rotation
+
+        rot_mat = self.quaternion_to_rotation_matrix(
+            rotation.x,
+            rotation.y,
+            rotation.z,
+            rotation.w
+        )
+        offset = np.array([translation.x, translation.y, translation.z], dtype=np.float32)
+        return np.dot(points, rot_mat.T) + offset
+
+    @staticmethod
+    def quaternion_to_rotation_matrix(x, y, z, w):
+        quat = np.array([x, y, z, w], dtype=np.float64)
+        norm = np.linalg.norm(quat)
+        if norm < 1e-12:
+            return np.eye(3, dtype=np.float32)
+
+        x, y, z, w = quat / norm
+        return np.array([
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+        ], dtype=np.float32)
+
     def pointcloud2_to_numpy(self, cloud_msg):
         """Robustlly extract XYZ and RGB from PointCloud2 without dtype mismatches"""
         try:
-            field_indices = {field.name: i for i, field in enumerate(cloud_msg.fields)}
-            if not all(f in field_indices for f in ('x', 'y', 'z')):
+            fields = {field.name: field for field in cloud_msg.fields}
+            if not all(field_name in fields for field_name in ('x', 'y', 'z')):
                 return None, None
             
             point_step = cloud_msg.point_step
             num_points = cloud_msg.width * cloud_msg.height
-            data = np.frombuffer(cloud_msg.data, dtype=np.uint8).reshape(num_points, point_step)
+            if num_points == 0 or point_step == 0:
+                return np.empty((0, 3), dtype=np.float32), np.empty(0, dtype=np.uint32)
+
+            raw = np.frombuffer(cloud_msg.data, dtype=np.uint8)
+            expected_size = num_points * point_step
+            if raw.size < expected_size:
+                self.get_logger().warn(
+                    f'PointCloud2 data is shorter than expected: {raw.size} < {expected_size}',
+                    throttle_duration_sec=5.0
+                )
+                return None, None
+
+            data = raw[:expected_size].reshape(num_points, point_step)
+            float_dtype = np.dtype('>f4' if cloud_msg.is_bigendian else '<f4')
+            uint_dtype = np.dtype('>u4' if cloud_msg.is_bigendian else '<u4')
             
-            off_x = cloud_msg.fields[field_indices['x']].offset
-            off_y = cloud_msg.fields[field_indices['y']].offset
-            off_z = cloud_msg.fields[field_indices['z']].offset
+            off_x = fields['x'].offset
+            off_y = fields['y'].offset
+            off_z = fields['z'].offset
             
             xyz = np.zeros((num_points, 3), dtype=np.float32)
-            xyz[:, 0] = data[:, off_x:off_x+4].view(np.float32).flatten()
-            xyz[:, 1] = data[:, off_y:off_y+4].view(np.float32).flatten()
-            xyz[:, 2] = data[:, off_z:off_z+4].view(np.float32).flatten()
+            xyz[:, 0] = data[:, off_x:off_x + 4].copy().view(float_dtype).reshape(-1)
+            xyz[:, 1] = data[:, off_y:off_y + 4].copy().view(float_dtype).reshape(-1)
+            xyz[:, 2] = data[:, off_z:off_z + 4].copy().view(float_dtype).reshape(-1)
             
-            rgbs = None
-            if 'rgb' in field_indices:
-                off_rgb = cloud_msg.fields[field_indices['rgb']].offset
-                rgbs = data[:, off_rgb:off_rgb+4].view(np.float32).flatten()
+            rgb_field = 'rgb' if 'rgb' in fields else 'rgba' if 'rgba' in fields else None
+            if rgb_field is not None:
+                off_rgb = fields[rgb_field].offset
+                rgbs = data[:, off_rgb:off_rgb + 4].copy().view(uint_dtype).reshape(-1)
             else:
-                rgbs = np.zeros(num_points, dtype=np.float32)
+                rgbs = np.zeros(num_points, dtype=np.uint32)
             
-            mask = ~np.isnan(xyz).any(axis=1)
+            mask = np.isfinite(xyz).all(axis=1)
             return xyz[mask], rgbs[mask]
         except Exception as e:
             self.get_logger().warn(f"Manual parsing failed: {e}")
@@ -226,6 +288,7 @@ class PointCloudSaver(Node):
                     rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
                 else:
                     rgb_int = int(rgb)
+                rgb_int &= 0x00FFFFFF
                 
                 r = (rgb_int >> 16) & 0xFF
                 g = (rgb_int >> 8) & 0xFF
@@ -236,7 +299,7 @@ class PointCloudSaver(Node):
         points = np.array(points)
         
         # Write PCD file (ASCII format for compatibility)
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8') as f:
             # Header
             f.write('# .PCD v0.7 - Point Cloud Data file format\n')
             f.write('VERSION 0.7\n')
@@ -266,10 +329,13 @@ def main(args=None):
     
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.destroy_node()
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
         if rclpy.ok():
             rclpy.shutdown()
 

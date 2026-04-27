@@ -7,6 +7,11 @@
   <maintainer email="daksh.vohra1@gmail.com">daksh</maintainer>
   <license>TODO: License declaration</license>
 
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>nav2_msgs</depend>
   <depend>nav2_bringup</depend>
   <depend>slam_toolbox</depend>
   <exec_depend>nav2_rviz_plugins</exec_depend>

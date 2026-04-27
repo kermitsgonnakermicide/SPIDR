@@ -17,7 +17,7 @@ source install/setup.bash
 
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-ros2 launch spooder_gazebo 01_sim_world.launch.py &
+ros2 launch spooder_gazebo 01_sim_world.launch.py headless:=false &
 sleep 5
 
 ros2 launch spooder_gazebo 02_robot_spawn.launch.py &

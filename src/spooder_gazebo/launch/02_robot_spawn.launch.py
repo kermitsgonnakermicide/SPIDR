@@ -52,14 +52,6 @@ def generate_launch_description():
     # 3. Controllers
     # These depend on the Gazebo plugin loading the model first. 
     # We add a delay to be safe, but they will retry if not ready.
-    joint_broadcaster = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['joint_state_broadcaster'],
-        output='screen',
-        parameters=[{'use_sim_time': use_sim_time}]
-    )
-
     controller = Node(
         package='controller_manager',
         executable='spawner',
@@ -100,9 +92,9 @@ def generate_launch_description():
         # Spawn
         spawn_entity,
         
-        # Wait for spawn -> load controllers
-        TimerAction(period=5.0, actions=[joint_broadcaster]),
-        TimerAction(period=7.0, actions=[controller]),
+        # Wait for spawn -> load the position controller.
+        # joint_state_broadcaster currently segfaults inside gz_ros2_control on activation.
+        TimerAction(period=5.0, actions=[controller]),
         
         # Start Logic
         TimerAction(period=12.0, actions=[ekf]),
