@@ -25,7 +25,7 @@ class GaitController(Node):
         self.get_logger().info("Gait Controller Initialized with 3D Adaptive Step Height")
 
         
-        self.ik = IKSolver(coxa_len=0.043, femur_len=0.060, tibia_len=0.104)
+        self.ik = IKSolver(coxa_len=0.05, femur_len=0.15, tibia_len=0.25)
         
         self.timer_period = 0.05 # 20 Hz
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
@@ -38,27 +38,22 @@ class GaitController(Node):
         self.gait_speed = 4.0 # Lowered for stability
         
 
-        self.body_length = 0.167
-        self.body_width = 0.163
-        self.body_radius = 0.08 # Legacy radius used in any relative calc
+        self.body_length = 0.50
+        self.body_width = 0.80
+        self.body_radius = 0.15 # Legacy radius used in any relative calc
      
         
-        self.neutral_x = 0.09
-        self.default_z = -0.12
+        self.default_z = -0.28 # Slightly higher than floor (0.30) to avoid IK limits
         self.last_joint_positions = [0.0] * 18
         self.first_run = True
-        self.start_time = time.monotonic()
-        self.flat_start_duration = 4.0
-        self.stand_transition_duration = 4.0
-        self.flat_joint_positions = [0.0] * 18
         
         # Adaptive gait parameters
         self.obstacle_ahead = False
         self.obstacle_height = 0.0
-        self.base_step_height = 0.025  # Normal step height
-        self.elevated_step_height = 0.06  # Step height when climbing
+        self.base_step_height = 0.05  # Normal step height
+        self.elevated_step_height = 0.15  # Step height when climbing
         self.current_step_height = self.base_step_height
-        self.step_height_transition_rate = 0.01  # Smooth transition
+        self.step_height_transition_rate = 0.02  # Smooth transition
         
         # Climbable obstacle thresholds
         self.min_climbable_height = 0.1  # Below this, treat as ground
@@ -121,27 +116,13 @@ class GaitController(Node):
         
     def timer_callback(self):
         if self.first_run:
-            self.get_logger().info("First Heartbeat: holding flat startup pose before standing")
+            self.get_logger().info(f"First Heartbeat: Standing up at z={self.default_z}")
             self.first_run = False
-
-        elapsed = time.monotonic() - self.start_time
-        if elapsed < self.flat_start_duration:
-            self.publish_joint_positions(self.flat_joint_positions)
-            self.get_logger().info(
-                "Holding flat startup pose",
-                throttle_duration_sec=2.0
-            )
-            return
-
-        stand_blend = min(
-            1.0,
-            max(0.0, (elapsed - self.flat_start_duration) / self.stand_transition_duration)
-        )
-
+            
         # Adaptively adjust step height AND body height based on 3D terrain
         if self.terrain_max_height > self.min_climbable_height:
-             target_step_height = min(self.elevated_step_height, self.terrain_max_height + 0.06)
-             self.target_body_lift = min(0.05, self.terrain_max_height * 0.8) # Raise body to 80% of obstacle height
+             target_step_height = min(self.elevated_step_height, self.terrain_max_height + 0.06) 
+             self.target_body_lift = min(0.15, self.terrain_max_height * 0.8) # Raise body to 80% of obstacle height
              self.obstacle_ahead = True
         else:
              target_step_height = self.base_step_height
@@ -165,10 +146,15 @@ class GaitController(Node):
                 f"3D Terrain: {self.terrain_max_height:.2f}m | Step: {self.current_step_height:.2f}m | Body Lift: {self.current_body_lift:.2f}m",
                 throttle_duration_sec=2.0
             )
+            
+        msg = Float64MultiArray()
+        
         # Increment phase
         if abs(self.vel_x) > 0.001 or abs(self.vel_yaw) > 0.001:
             self.phase += self.gait_speed * self.timer_period
-
+        
+        amplitude_x = 0.05 * self.vel_x
+        amplitude_z = self.current_step_height # Use adaptive step height
         joint_positions = []
         
 
@@ -187,32 +173,25 @@ class GaitController(Node):
             current_phase = self.phase + group_offset
             
             speed_linear = self.vel_x
-            # Get the base standing pose joint angles (URDF zero-pose is standing!)
-            t1_stand, t2_stand, t3_stand = self.ik.solve(self.neutral_x, 0.0, self.default_z)
-
+            speed_turn = self.vel_yaw
+            
             if abs(speed_linear) < 0.001 and abs(speed_turn) < 0.001:
                  # Default Standing Pose - Adapt to body lift
-                 x_val = self.neutral_x
+                 x_val = 0.25 
                  y_val = 0.0
                  z_val = self.default_z - self.current_body_lift 
                  
                  t1, t2, t3 = self.ik.solve(x_val, y_val, z_val)
                  
-                 # URDF is constructed such that 0,0,0 is the standing pose!
-                 # Compute relative required joint motion:
-                 t1_cmd = -(t1 - t1_stand)
-                 t2_cmd = t2 - t2_stand
-                 t3_cmd = -(t3 - t3_stand)
-                 
                  # Clamping to URDF limits
-                 t1_cmd = max(-1.0, min(1.0, t1_cmd))
-                 t2_cmd = max(-0.8, min(0.8, t2_cmd))
-                 t3_cmd = max(-1.570796, min(0.7, t3_cmd))
+                 t1_cmd = max(-0.7, min(0.7, t1))
+                 t2_cmd = max(-1.5, min(1.5, t2))
+                 t3_cmd = max(-2.5, min(0.5, t3))
                  
                  joint_positions.extend([t1_cmd, t2_cmd, t3_cmd])
                  continue
 
-            stride_amp = 0.035
+            stride_amp = 0.07 
             cycle_val = math.cos(current_phase)
             
             cos_yaw = math.cos(leg_yaws[i])
@@ -235,39 +214,30 @@ class GaitController(Node):
                  # Lift leg using adaptive step height
                  z_val += self.current_step_height * math.sin(current_phase)
 
-            x_target = self.neutral_x + x_off
+            x_target = 0.25 + x_off
             y_target = y_off
             
             t1, t2, t3 = self.ik.solve(x_target, y_target, z_val)
             
             # If IK fails, use neutral pose instead of jumping to (0,0,0)
             if t1 == 0.0 and t2 == 0.0 and t3 == 0.0:
-                t1, t2, t3 = t1_stand, t2_stand, t3_stand
-
-            # Compute relative required joint motion:
-            t1_cmd = -(t1 - t1_stand)
-            t2_cmd = t2 - t2_stand
-            t3_cmd = -(t3 - t3_stand)
+                # Re-solve for default standing pose for this leg
+                t1, t2, t3 = self.ik.solve(0.25, 0.0, self.default_z)
 
             # Clamping to URDF limits
-            t1_cmd = max(-1.0, min(1.0, t1_cmd))
-            t2_cmd = max(-0.8, min(0.8, t2_cmd))
-            t3_cmd = max(-1.570796, min(0.7, t3_cmd))
+            t1_cmd = max(-0.7, min(0.7, t1))
+            t2_cmd = max(-1.5, min(1.5, t2))
+            t3_cmd = max(-2.5, min(0.5, t3))
             
             joint_positions.extend([t1_cmd, t2_cmd, t3_cmd])
 
         self.last_joint_positions = joint_positions
 
-        if stand_blend < 1.0:
-            joint_positions = [
-                flat + (target - flat) * stand_blend
-                for flat, target in zip(self.flat_joint_positions, joint_positions)
-            ]
+        # msg.data = joint_positions
+        # self.publisher_.publish(msg)
+        # # Print debug angles for the first leg (RF)
+        # print(f"DEBUG: RF Leg Angles: Coxa={joint_positions[0]:.2f}, Femur={joint_positions[1]:.2f}, Tibia={joint_positions[2]:.2f}")
 
-        self.publish_joint_positions(joint_positions)
-
-    def publish_joint_positions(self, joint_positions):
-        msg = Float64MultiArray()
         msg.data = joint_positions
         self.publisher_.publish(msg)
 
