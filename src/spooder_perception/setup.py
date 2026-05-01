@@ -1,6 +1,7 @@
-from setuptools import find_packages, setup
-import os
 from glob import glob
+import os
+
+from setuptools import find_packages, setup
 
 package_name = 'spooder_perception'
 
@@ -30,7 +31,8 @@ setup(
         'console_scripts': [
             'pointcloud_optimizer = spooder_perception.pointcloud_optimizer:main',
             'pointcloud_saver = spooder_perception.pointcloud_saver:main',
-            'terrain_analyzer = spooder_perception.terrain_analyzer:main'
+            'terrain_analyzer = spooder_perception.terrain_analyzer:main',
+            'octomap_terrain_adapter = spooder_perception.octomap_terrain_adapter:main',
         ],
     },
 )

@@ -31,6 +31,11 @@ if [ -f "install/setup.bash" ]; then
     source install/setup.bash
 fi
 
+if ! ros2 pkg prefix octomap_server >/dev/null 2>&1; then
+    log "Missing ROS package: octomap_server"
+    log "Install it with: sudo apt-get install -y ros-jazzy-octomap-server ros-jazzy-octomap-ros"
+    exit 1
+fi
 
 
 if [ "${SPOODER_SKIP_CLEANUP:-0}" = "1" ]; then
@@ -50,6 +55,8 @@ source install/setup.bash
 
 
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+CLOUD_TOPIC="${SPOODER_CLOUD_TOPIC:-/camera/points}"
+OPTIMIZED_CLOUD_TOPIC="${SPOODER_OPTIMIZED_CLOUD_TOPIC:-/camera/points/optimized}"
 
 launch_background ros2 launch spooder_gazebo 01_sim_world.launch.py headless:=false
 sleep 5
@@ -59,6 +66,9 @@ sleep 10 # Wait for spawner and EKF to stabilize
 
 launch_background ros2 launch spooder_navigation slam.launch.py
 sleep 5
+
+launch_background ros2 launch spooder_perception perception.launch.py cloud_topic:="$CLOUD_TOPIC" optimized_cloud_topic:="$OPTIMIZED_CLOUD_TOPIC"
+sleep 6
 
 launch_background ros2 launch spooder_navigation navigation.launch.py
 sleep 5
@@ -73,8 +83,7 @@ if ! kill -0 "$RVIZ_PID" 2>/dev/null; then
     wait "$RVIZ_PID"
 fi
 
-launch_background ros2 launch spooder_perception perception.launch.py
-sleep 10 # Wait for lifecycle manager to activate all 11 nodes
+sleep 4 # Let Nav2 subscribe to the OctoMap terrain layer before driving.
 
 log "Startup complete. RViz is running; close RViz or press Ctrl-C to stop Spooder."
 wait "$RVIZ_PID"

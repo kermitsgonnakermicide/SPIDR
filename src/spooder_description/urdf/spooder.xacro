@@ -3,12 +3,12 @@
   <xacro:arg name="config_file" default=""/>
 
   <!-- Properties -->
-  <xacro:property name="body_length" value="0.50"/>
-  <xacro:property name="body_width" value="0.80"/>
-  <xacro:property name="body_height" value="0.10"/>
-  <xacro:property name="coxa_length" value="0.05"/>
-  <xacro:property name="femur_length" value="0.15"/>
-  <xacro:property name="tibia_length" value="0.25"/>
+  <xacro:property name="body_length" value="0.167"/>
+  <xacro:property name="body_width" value="0.126"/>
+  <xacro:property name="body_height" value="0.05"/>
+  <xacro:property name="coxa_length" value="0.043"/>
+  <xacro:property name="femur_length" value="0.060"/>
+  <xacro:property name="tibia_length" value="0.104"/>
 
   <!-- Include Camera -->
   <xacro:include filename="$(find spooder_description)/urdf/camera.xacro"/>
@@ -172,17 +172,17 @@
   <!-- Instantiate Legs (6 Legs) -->
   <!-- R: Right, L: Left | F: Front, M: Middle, R: Rear -->
   <!-- Right Side -->
-  <xacro:leg prefix="rf" side_sign="-1" x_offset="0.05"  y_offset="-${body_width/2}" yaw="-0.7853"/>
-  <xacro:leg prefix="rm" side_sign="-1" x_offset="-0.10" y_offset="-${body_width/2}" yaw="-1.5708"/>
-  <xacro:leg prefix="rr" side_sign="-1" x_offset="-0.25" y_offset="-${body_width/2}" yaw="-2.3561"/>
+  <xacro:leg prefix="rf" side_sign="-1" x_offset="0.0835"  y_offset="-0.063" yaw="-0.7853"/>
+  <xacro:leg prefix="rm" side_sign="-1" x_offset="0.0" y_offset="-0.063" yaw="-1.5708"/>
+  <xacro:leg prefix="rr" side_sign="-1" x_offset="-0.0835" y_offset="-0.063" yaw="-2.3561"/>
   
   <!-- Left Side -->
-  <xacro:leg prefix="lf" side_sign="1"  x_offset="0.05"  y_offset="${body_width/2}"  yaw="0.7853"/>
-  <xacro:leg prefix="lm" side_sign="1"  x_offset="-0.10" y_offset="${body_width/2}"  yaw="1.5708"/>
-  <xacro:leg prefix="lr" side_sign="1"  x_offset="-0.25" y_offset="${body_width/2}"  yaw="2.3561"/>
+  <xacro:leg prefix="lf" side_sign="1"  x_offset="0.0835"  y_offset="0.063"  yaw="0.7853"/>
+  <xacro:leg prefix="lm" side_sign="1"  x_offset="0.0" y_offset="0.063"  yaw="1.5708"/>
+  <xacro:leg prefix="lr" side_sign="1"  x_offset="-0.0835" y_offset="0.063"  yaw="2.3561"/>
 
-  <!-- Depth Camera (Center-front, high enough to miss the 0.80m wide base edges) -->
-  <xacro:depth_camera parent_link="base_link" origin_xyz="0.25 0 0.25" origin_rpy="0 0 0"/>
+  <!-- Depth Camera -->
+  <xacro:depth_camera parent_link="base_link" origin_xyz="0.095 0 0.15" origin_rpy="0 0 0"/>
 
   <!-- ros2_control -->
   <ros2_control name="SpooderSystem" type="system">

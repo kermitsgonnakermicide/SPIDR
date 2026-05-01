@@ -27,7 +27,7 @@ class PointCloudOptimizer(Node):
         self.declare_parameter('change_ratio', 0.02)
         self.declare_parameter('min_changed_voxels', 150)
         self.declare_parameter('min_publish_interval', 0.2)
-        self.declare_parameter('force_publish_interval', 0.0)
+        self.declare_parameter('force_publish_interval', 0.5)
         self.declare_parameter('range_min', 0.05)
         self.declare_parameter('range_max', 8.0)
         self.declare_parameter('max_output_points', 120000)
@@ -98,12 +98,20 @@ class PointCloudOptimizer(Node):
             )
             return
 
-        if self.min_publish_interval > 0.0 and now - self.last_publish_time < self.min_publish_interval:
+        if (
+            self.min_publish_interval > 0.0 and
+            now - self.last_publish_time < self.min_publish_interval
+        ):
             return
 
         optimized_points = points[indices]
         if len(optimized_points) > self.max_output_points:
-            sample_idx = np.linspace(0, len(optimized_points) - 1, self.max_output_points, dtype=np.int64)
+            sample_idx = np.linspace(
+                0,
+                len(optimized_points) - 1,
+                self.max_output_points,
+                dtype=np.int64,
+            )
             optimized_points = optimized_points[sample_idx]
 
         self.publisher.publish(self.numpy_to_pointcloud2(msg.header, optimized_points))
@@ -141,7 +149,10 @@ class PointCloudOptimizer(Node):
         if self.last_published_keys is None:
             return True, len(keys), 1.0, 'initial'
 
-        if self.force_publish_interval > 0.0 and now - self.last_publish_time >= self.force_publish_interval:
+        if (
+            self.force_publish_interval > 0.0 and
+            now - self.last_publish_time >= self.force_publish_interval
+        ):
             return True, 0, 0.0, 'forced'
 
         added = np.setdiff1d(keys, self.last_published_keys, assume_unique=True)
@@ -162,7 +173,10 @@ class PointCloudOptimizer(Node):
         try:
             fields = {field.name: field for field in cloud_msg.fields}
             if not all(field_name in fields for field_name in ('x', 'y', 'z')):
-                self.get_logger().warn('PointCloud2 missing x/y/z fields', throttle_duration_sec=5.0)
+                self.get_logger().warn(
+                    'PointCloud2 missing x/y/z fields',
+                    throttle_duration_sec=5.0,
+                )
                 return None
 
             point_step = cloud_msg.point_step

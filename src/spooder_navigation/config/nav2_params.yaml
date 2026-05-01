@@ -197,16 +197,27 @@ global_costmap:
       footprint: "[ [0.10, 0.10], [0.10, -0.10], [-0.10, -0.10], [-0.10, 0.10] ]"
       resolution: 0.05
       rolling_window: true
-      width: 10
-      height: 6
+      width: 20
+      height: 8
       track_unknown_space: false
-      plugins: ["static_layer", "voxel_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "octomap_terrain_layer", "voxel_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
         enabled: True
         subscribe_to_updates: True
         transform_tolerance: 2.0
+      octomap_terrain_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        enabled: True
+        map_topic: /terrain/traversability
+        map_subscribe_transient_local: True
+        subscribe_to_updates: False
+        transform_tolerance: 2.0
+        trinary_costmap: false
+        use_maximum: true
+        lethal_cost_threshold: 100
+        unknown_cost_value: -1
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -216,24 +227,13 @@ global_costmap:
         z_voxels: 12
         max_obstacle_height: 0.6
         mark_threshold: 0
-        observation_sources: scan camera_pointcloud
+        observation_sources: scan
         scan:
           topic: /scan
           max_obstacle_height: 0.6
           clearing: True
           marking: True
           data_type: "LaserScan"
-        camera_pointcloud:
-          topic: /camera/points/optimized
-          data_type: "PointCloud2"
-          min_obstacle_height: 0.08
-          max_obstacle_height: 0.6
-          obstacle_max_range: 4.0
-          obstacle_min_range: 0.1
-          raytrace_max_range: 8.0
-          raytrace_min_range: 0.0
-          clearing: True
-          marking: True
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -268,7 +268,18 @@ local_costmap:
       height: 3
       resolution: 0.05
       footprint: "[ [0.10, 0.10], [0.10, -0.10], [-0.10, -0.10], [-0.10, 0.10] ]"
-      plugins: ["voxel_layer", "inflation_layer"]
+      plugins: ["octomap_terrain_layer", "voxel_layer", "inflation_layer"]
+      octomap_terrain_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        enabled: True
+        map_topic: /terrain/traversability
+        map_subscribe_transient_local: True
+        subscribe_to_updates: False
+        transform_tolerance: 2.0
+        trinary_costmap: false
+        use_maximum: true
+        lethal_cost_threshold: 100
+        unknown_cost_value: -1
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -278,24 +289,13 @@ local_costmap:
         z_voxels: 12
         max_obstacle_height: 0.6
         mark_threshold: 0
-        observation_sources: scan camera_pointcloud
+        observation_sources: scan
         scan:
           topic: /scan
           max_obstacle_height: 0.6
           clearing: True
           marking: True
           data_type: "LaserScan"
-        camera_pointcloud:
-          topic: /camera/points/optimized
-          data_type: "PointCloud2"
-          min_obstacle_height: 0.08
-          max_obstacle_height: 0.6
-          obstacle_max_range: 4.0
-          obstacle_min_range: 0.1
-          raytrace_max_range: 8.0
-          raytrace_min_range: 0.0
-          clearing: True
-          marking: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
@@ -325,7 +325,7 @@ collision_monitor:
       topic: "/scan"
     camera_pointcloud:
       type: "pointcloud"
-      topic: "/camera/points/optimized"
+      topic: "/camera/points"
       min_height: 0.08
       max_height: 0.6
 
