@@ -88,8 +88,10 @@
       <material name="blue"/>
     </visual>
     <collision>
-      <origin xyz="${tibia_len/2} 0 0" rpy="0 1.5708 0"/>
-      <geometry><cylinder radius="0.01" length="${tibia_len}"/></geometry>
+      <origin xyz="0.183123 0.124909 -0.123986" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="file:///home/daksh/spooder_ws/diddler/meshes/tibia_L1_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
     </collision>
   </link>
 
@@ -146,8 +148,10 @@
       <material name="blue"/>
     </visual>
     <collision>
-      <origin xyz="${tibia_len/2} 0 0" rpy="0 1.5708 0"/>
-      <geometry><cylinder radius="0.01" length="${tibia_len}"/></geometry>
+      <origin xyz="0.0256 0.194532 -0.123986" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="file:///home/daksh/spooder_ws/diddler/meshes/tibia_L2_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
     </collision>
   </link>
 
@@ -204,8 +208,10 @@
       <material name="blue"/>
     </visual>
     <collision>
-      <origin xyz="${tibia_len/2} 0 0" rpy="0 1.5708 0"/>
-      <geometry><cylinder radius="0.01" length="${tibia_len}"/></geometry>
+      <origin xyz="-0.14741 0.160623 -0.123986" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="file:///home/daksh/spooder_ws/diddler/meshes/tibia_L3_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
     </collision>
   </link>
 
@@ -262,8 +268,10 @@
       <material name="blue"/>
     </visual>
     <collision>
-      <origin xyz="${tibia_len/2} 0 0" rpy="0 1.5708 0"/>
-      <geometry><cylinder radius="0.01" length="${tibia_len}"/></geometry>
+      <origin xyz="0.183123 -0.124909 -0.123986" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="file:///home/daksh/spooder_ws/diddler/meshes/tibia_R1_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
     </collision>
   </link>
 
@@ -320,8 +328,10 @@
       <material name="blue"/>
     </visual>
     <collision>
-      <origin xyz="${tibia_len/2} 0 0" rpy="0 1.5708 0"/>
-      <geometry><cylinder radius="0.01" length="${tibia_len}"/></geometry>
+      <origin xyz="0.0256 -0.194532 -0.123986" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="file:///home/daksh/spooder_ws/diddler/meshes/tibia_R2_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
     </collision>
   </link>
 
@@ -378,8 +388,10 @@
       <material name="blue"/>
     </visual>
     <collision>
-      <origin xyz="${tibia_len/2} 0 0" rpy="0 1.5708 0"/>
-      <geometry><cylinder radius="0.01" length="${tibia_len}"/></geometry>
+      <origin xyz="-0.14741 -0.160623 -0.123986" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="file:///home/daksh/spooder_ws/diddler/meshes/tibia_R3_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
     </collision>
   </link>
 

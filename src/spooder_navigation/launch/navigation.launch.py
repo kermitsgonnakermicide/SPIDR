@@ -2,6 +2,7 @@ import os
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -14,6 +15,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     params_file = LaunchConfiguration('params_file',
         default=os.path.join(pkg_spooder_navigation, 'config', 'nav2_params.yaml'))
+    use_unstuck_monitor = LaunchConfiguration('use_unstuck_monitor', default='false')
     
     autostart = LaunchConfiguration('autostart', default='true')
     use_composition = LaunchConfiguration('use_composition', default='True')
@@ -37,6 +39,7 @@ def generate_launch_description():
         name='unstuck_monitor',
         output='screen',
         parameters=[params_file],
+        condition=IfCondition(use_unstuck_monitor),
     )
 
     return LaunchDescription([
@@ -48,6 +51,10 @@ def generate_launch_description():
             'params_file',
             default_value=os.path.join(pkg_spooder_navigation, 'config', 'nav2_params.yaml'),
             description='Full path to the ROS2 parameters file to use for all launched nodes'),
+        DeclareLaunchArgument(
+            'use_unstuck_monitor',
+            default_value='false',
+            description='Enable the custom recovery monitor in addition to Nav2 recoveries'),
         
         nav2_launch,
         unstuck_monitor_node,

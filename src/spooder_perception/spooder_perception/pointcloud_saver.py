@@ -7,16 +7,17 @@ Accumulates depth camera point clouds and exports to PCD format
 import rclpy
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from rclpy.node import Node
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
 from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformListener
 import numpy as np
 import struct
 import os
+import time
 from datetime import datetime
-from collections import defaultdict
 
 
 class PointCloudSaver(Node):
@@ -30,6 +31,9 @@ class PointCloudSaver(Node):
         self.declare_parameter('auto_save_interval', 0.0)
         self.declare_parameter('output_directory', os.path.expanduser('~/spooder_maps'))
         self.declare_parameter('map_frame', 'map')
+        self.declare_parameter('input_topic', '/camera/points')
+        self.declare_parameter('map_topic', '/spooder/map_points')
+        self.declare_parameter('map_publish_interval', 1.0)
         
         self.voxel_size = self.get_parameter('voxel_size').value
         self.dist_threshold = self.get_parameter('dist_threshold').value
@@ -37,13 +41,18 @@ class PointCloudSaver(Node):
         self.auto_save_interval = self.get_parameter('auto_save_interval').value
         self.output_dir = os.path.expanduser(str(self.get_parameter('output_directory').value))
         self.map_frame = self.get_parameter('map_frame').value
+        self.input_topic = self.get_parameter('input_topic').value
+        self.map_topic = self.get_parameter('map_topic').value
+        self.map_publish_interval = float(self.get_parameter('map_publish_interval').value)
         
         # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
         
         # Voxel grid for accumulation (using dict for sparse storage)
-        self.voxel_grid = defaultdict(lambda: {'xyz': None, 'rgb': None, 'count': 0})
+        self.voxel_grid = {}
         self.total_points = 0
+        self.dirty_voxels = 0
+        self.last_map_publish_time = 0.0
         
         # TF buffer for transforming clouds
         self.tf_buffer = Buffer()
@@ -52,10 +61,17 @@ class PointCloudSaver(Node):
         # Subscriber
         self.subscription = self.create_subscription(
             PointCloud2,
-            '/camera/points',
+            self.input_topic,
             self.pointcloud_callback,
             10
         )
+        map_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.map_publisher = self.create_publisher(PointCloud2, self.map_topic, map_qos)
         
         # Service
         self.save_service = self.create_service(
@@ -70,8 +86,16 @@ class PointCloudSaver(Node):
                 self.auto_save_interval,
                 self.auto_save_callback
             )
+
+        if self.map_publish_interval > 0.0:
+            self.map_publish_timer = self.create_timer(
+                self.map_publish_interval,
+                self.publish_map_if_dirty
+            )
         
         self.get_logger().info(f'Point Cloud Saver initialized')
+        self.get_logger().info(f'  Input topic: {self.input_topic}')
+        self.get_logger().info(f'  Persistent map topic: {self.map_topic}')
         self.get_logger().info(f'  Voxel size: {self.voxel_size}m')
         self.get_logger().info(f'  Max points: {self.max_points}')
         self.get_logger().info(f'  Output dir: {self.output_dir}')
@@ -108,7 +132,10 @@ class PointCloudSaver(Node):
                     self.get_logger().warn(f'Transform failed: {e}', throttle_duration_sec=5.0)
                     return
 
+            points, rgbs = self.deduplicate_frame_points(points, rgbs)
+
             points_added = 0
+            points_updated = 0
             for i in range(len(points)):
                 x, y, z = points[i]
                 rgb = rgbs[i]
@@ -117,12 +144,18 @@ class PointCloudSaver(Node):
                 key = self.voxel_key(x, y, z)
                 
                 # Add or update voxel
-                voxel = self.voxel_grid[key]
-                if voxel['xyz'] is None:
+                voxel = self.voxel_grid.get(key)
+                if voxel is None:
+                    if self.total_points >= self.max_points:
+                        self.get_logger().warn('Max points reached, keeping existing map only', throttle_duration_sec=10.0)
+                        continue
+
                     # New voxel
-                    voxel['xyz'] = np.array([x, y, z])
-                    voxel['rgb'] = rgb
-                    voxel['count'] = 1
+                    self.voxel_grid[key] = {
+                        'xyz': np.array([x, y, z]),
+                        'rgb': rgb,
+                        'count': 1,
+                    }
                     points_added += 1
                     self.total_points += 1
                 else:
@@ -133,23 +166,82 @@ class PointCloudSaver(Node):
                         # Significant change, update voxel (moving average)
                         count = voxel['count']
                         voxel['xyz'] = (voxel['xyz'] * count + np.array([x, y, z])) / (count + 1)
+                        voxel['rgb'] = rgb
                         voxel['count'] += 1
+                        points_updated += 1
                         # We don't increment total_points as it's an update
                     # Else: skip, the point hasn't "changed" enough to justify processing
-                
-                # Check max points limit
-                if self.total_points >= self.max_points:
-                    self.get_logger().warn('Max points reached, stopping accumulation', throttle_duration_sec=10.0)
-                    break
             
-            if points_added > 0:
+            points_changed = points_added + points_updated
+            if points_changed > 0:
+                self.dirty_voxels += points_changed
                 self.get_logger().info(
-                    f'Accumulated {points_added} new voxels (total: {self.total_points})',
+                    f'Kept {points_added} new voxels, updated {points_updated} existing voxels '
+                    f'(total kept: {self.total_points})',
                     throttle_duration_sec=5.0
                 )
         
         except Exception as e:
             self.get_logger().error(f'Error processing point cloud: {e}')
+
+    def deduplicate_frame_points(self, points, rgbs):
+        """Keep only one sample per map voxel from the current camera frame."""
+        if len(points) == 0:
+            return points, rgbs
+
+        voxel_coords = np.floor(points / self.voxel_size).astype(np.int32)
+        _, indices = np.unique(voxel_coords, axis=0, return_index=True)
+        return points[indices], rgbs[indices]
+
+    def publish_map_if_dirty(self):
+        """Publish the persistent optimized map only after kept voxels changed."""
+        if self.dirty_voxels == 0 or self.total_points == 0:
+            return
+
+        now = time.monotonic()
+        if now - self.last_map_publish_time < self.map_publish_interval:
+            return
+
+        self.map_publisher.publish(self.voxel_grid_to_pointcloud2())
+        self.get_logger().info(
+            f'Published persistent map cloud ({self.total_points} kept points, '
+            f'{self.dirty_voxels} changed voxels)',
+            throttle_duration_sec=5.0
+        )
+        self.dirty_voxels = 0
+        self.last_map_publish_time = now
+
+    def voxel_grid_to_pointcloud2(self):
+        kept_voxels = [voxel for voxel in self.voxel_grid.values() if voxel['xyz'] is not None]
+        cloud = np.zeros(
+            len(kept_voxels),
+            dtype=[('x', '<f4'), ('y', '<f4'), ('z', '<f4'), ('rgb', '<u4')]
+        )
+
+        for index, voxel in enumerate(kept_voxels):
+            x, y, z = voxel['xyz']
+            cloud['x'][index] = x
+            cloud['y'][index] = y
+            cloud['z'][index] = z
+            cloud['rgb'][index] = self.normalize_rgb(voxel['rgb'])
+
+        msg = PointCloud2()
+        msg.header.frame_id = self.map_frame
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.height = 1
+        msg.width = len(cloud)
+        msg.is_dense = True
+        msg.is_bigendian = False
+        msg.point_step = 16
+        msg.row_step = msg.point_step * msg.width
+        msg.fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='rgb', offset=12, datatype=PointField.UINT32, count=1),
+        ]
+        msg.data = cloud.tobytes()
+        return msg
 
     def lookup_transform(self, target_frame, source_frame, stamp):
         """Look up a transform, falling back to the latest TF if stamped TF lags."""
@@ -198,7 +290,7 @@ class PointCloudSaver(Node):
         ], dtype=np.float32)
 
     def pointcloud2_to_numpy(self, cloud_msg):
-        """Robustlly extract XYZ and RGB from PointCloud2 without dtype mismatches"""
+        """Robustly extract XYZ and RGB from PointCloud2 without dtype mismatches"""
         try:
             fields = {field.name: field for field in cloud_msg.fields}
             if not all(field_name in fields for field_name in ('x', 'y', 'z')):
@@ -281,14 +373,7 @@ class PointCloudSaver(Node):
         for voxel in self.voxel_grid.values():
             if voxel['xyz'] is not None:
                 x, y, z = voxel['xyz']
-                rgb = voxel['rgb']
-                
-                # Unpack RGB
-                if isinstance(rgb, float):
-                    rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
-                else:
-                    rgb_int = int(rgb)
-                rgb_int &= 0x00FFFFFF
+                rgb_int = self.normalize_rgb(voxel['rgb'])
                 
                 r = (rgb_int >> 16) & 0xFF
                 g = (rgb_int >> 8) & 0xFF
@@ -321,6 +406,14 @@ class PointCloudSaver(Node):
                 f.write(f'{x:.6f} {y:.6f} {z:.6f} {rgb_packed}\n')
         
         return filename
+
+    @staticmethod
+    def normalize_rgb(rgb):
+        if isinstance(rgb, float):
+            rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
+        else:
+            rgb_int = int(rgb)
+        return rgb_int & 0x00FFFFFF
 
 
 def main(args=None):

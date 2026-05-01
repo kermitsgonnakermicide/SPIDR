@@ -31,7 +31,11 @@ class UnstuckMonitor(Node):
         self.declare_parameter('status_topic', '/unstuck_monitor/status')
         self.declare_parameter('spin_action', '/spin')
         self.declare_parameter('backup_action', '/backup')
+        self.declare_parameter('enabled', False)
+        self.declare_parameter('startup_grace_period', 20.0)
+        self.declare_parameter('command_timeout', 2.0)
         
+        self.enabled = self.get_parameter('enabled').value
         self.stuck_timeout = self.get_parameter('stuck_timeout').value
         self.min_vel_threshold = self.get_parameter('min_velocity_threshold').value
         self.oscillation_radius = self.get_parameter('oscillation_radius').value
@@ -42,11 +46,15 @@ class UnstuckMonitor(Node):
         self.status_topic = self.get_parameter('status_topic').value
         self.spin_action = self.get_parameter('spin_action').value
         self.backup_action = self.get_parameter('backup_action').value
+        self.startup_grace_period = self.get_parameter('startup_grace_period').value
+        self.command_timeout = self.get_parameter('command_timeout').value
         
         # State tracking
         self.position_history = deque(maxlen=self.history_size)
         self.cmd_vel_history = deque(maxlen=20)
+        self.start_time = self.get_clock().now()
         self.last_movement_time = self.get_clock().now()
+        self.last_cmd_time = None
         self.last_position = None
         self.current_velocity = None
         self.is_recovering = False
@@ -83,6 +91,7 @@ class UnstuckMonitor(Node):
         self.check_timer = self.create_timer(0.5, self.check_stuck)  # Check every 0.5s instead of 1.0s
         
         self.get_logger().info('Unstuck Monitor initialized')
+        self.get_logger().info(f'  Enabled: {self.enabled}')
         self.get_logger().info(f'  Odom topic: {self.odom_topic}')
         self.get_logger().info(f'  Cmd vel topic: {self.cmd_vel_topic}')
         self.get_logger().info(f'  Stuck timeout: {self.stuck_timeout}s')
@@ -116,10 +125,27 @@ class UnstuckMonitor(Node):
         """Track commanded velocities"""
         cmd_vel = np.array([msg.linear.x, msg.linear.y, msg.angular.z])
         self.cmd_vel_history.append(cmd_vel)
+        if np.linalg.norm(cmd_vel) > 0.05:
+            self.last_cmd_time = self.get_clock().now()
     
     def check_stuck(self):
         """Check if robot is stuck and trigger recovery"""
+        if not self.enabled:
+            return
+
         if self.is_recovering:
+            return
+
+        now = self.get_clock().now()
+        uptime = (now - self.start_time).nanoseconds / 1e9
+        if uptime < self.startup_grace_period:
+            return
+
+        if self.last_cmd_time is None:
+            return
+
+        time_since_cmd = (now - self.last_cmd_time).nanoseconds / 1e9
+        if time_since_cmd > self.command_timeout:
             return
         
         if len(self.position_history) < 10:

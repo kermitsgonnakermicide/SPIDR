@@ -28,6 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'pointcloud_optimizer = spooder_perception.pointcloud_optimizer:main',
             'pointcloud_saver = spooder_perception.pointcloud_saver:main',
             'terrain_analyzer = spooder_perception.terrain_analyzer:main'
         ],

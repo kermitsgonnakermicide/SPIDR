@@ -33,9 +33,9 @@ def generate_launch_description():
 
 
     # Spawn position parameters
-    spawn_x = LaunchConfiguration('spawn_x', default='0.0')
+    spawn_x = LaunchConfiguration('spawn_x', default='1.0')
     spawn_y = LaunchConfiguration('spawn_y', default='0.0')
-    spawn_z = LaunchConfiguration('spawn_z', default='0.1')
+    spawn_z = LaunchConfiguration('spawn_z', default='0.2')
     spawn_yaw = LaunchConfiguration('spawn_yaw', default='0.0')
 
     # 2. Spawn Entity (Injects model into Gazebo)
@@ -85,6 +85,10 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
+        DeclareLaunchArgument('spawn_x', default_value='1.0'),
+        DeclareLaunchArgument('spawn_y', default_value='0.0'),
+        DeclareLaunchArgument('spawn_z', default_value='0.2'),
+        DeclareLaunchArgument('spawn_yaw', default_value='0.0'),
         
         # Immediate TF
         robot_state_publisher,

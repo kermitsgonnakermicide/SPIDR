@@ -20,6 +20,7 @@ class TerrainAnalyzer(Node):
         self.declare_parameter('max_climbable_height', 0.25)
         self.declare_parameter('voxel_size', 0.05)
         self.declare_parameter('change_threshold', 0.02)
+        self.declare_parameter('input_topic', '/camera/points/optimized')
         
         self.roi_x_min = self.get_parameter('roi_x_min').value
         self.roi_x_max = self.get_parameter('roi_x_max').value
@@ -29,6 +30,7 @@ class TerrainAnalyzer(Node):
         self.max_climbable_height = self.get_parameter('max_climbable_height').value
         self.voxel_size = self.get_parameter('voxel_size').value
         self.change_threshold = self.get_parameter('change_threshold').value
+        self.input_topic = self.get_parameter('input_topic').value
         
         self.last_published_height = 0.0
         
@@ -40,7 +42,7 @@ class TerrainAnalyzer(Node):
         # Subscription
         self.subscription = self.create_subscription(
             PointCloud2,
-            '/camera/points',
+            self.input_topic,
             self.pointcloud_callback,
             10
         )
@@ -50,6 +52,7 @@ class TerrainAnalyzer(Node):
         self.debug_pc_pub = self.create_publisher(PointCloud2, '/perception/debug_terrain_pc', 10)
         
         self.get_logger().info("3D Terrain Analyzer (TF-Aware) Initialized")
+        self.get_logger().info(f"  Input topic: {self.input_topic}")
 
     def pointcloud_callback(self, msg):
         """Analyze point cloud to find maximum terrain height in front of robot"""

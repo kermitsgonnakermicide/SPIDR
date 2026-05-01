@@ -1,7 +1,40 @@
+pointcloud_optimizer:
+  ros__parameters:
+    input_topic: "/camera/points"
+    output_topic: "/camera/points/optimized"
+
+    # Scene-change resolution. Higher values are faster and less sensitive to
+    # depth-camera noise; lower values react to smaller geometry changes.
+    voxel_size: 0.05
+
+    # Live-stream optimization for Nav2/terrain analysis. The persistent saved
+    # map still consumes raw camera points and optimizes what it keeps.
+    min_changed_voxels: 150
+    change_ratio: 0.02
+
+    # Limit publish rate while the scene is genuinely changing.
+    min_publish_interval: 0.2
+
+    # 0 disables heartbeat republishing; unchanged scenes stay quiet.
+    force_publish_interval: 0.0
+
+    range_min: 0.05
+    range_max: 8.0
+    max_output_points: 120000
+
 pointcloud_saver:
   ros__parameters:
+    input_topic: "/camera/points"
+    map_topic: "/spooder/map_points"
+
     # Voxel grid resolution for downsampling (meters)
-    voxel_size: 0.02
+    voxel_size: 0.05
+
+    # Existing map voxels are updated only if the new sample moves this far.
+    dist_threshold: 0.01
+
+    # Publish the persistent optimized map for RViz only when kept voxels change.
+    map_publish_interval: 1.0
     
     # Maximum number of points to store in memory
     max_points: 1000000
@@ -15,3 +48,7 @@ pointcloud_saver:
     
     # Target frame for accumulated point cloud
     map_frame: "map"
+
+terrain_analyzer:
+  ros__parameters:
+    input_topic: "/camera/points/optimized"

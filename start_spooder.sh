@@ -1,4 +1,31 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Ee -o pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+LAUNCH_PIDS=()
+
+log() {
+    printf '\n[%s] %s\n' "$(date +%H:%M:%S)" "$*"
+}
+
+cleanup() {
+    for pid in "${LAUNCH_PIDS[@]}"; do
+        kill -TERM -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+    done
+    sleep 2
+    for pid in "${LAUNCH_PIDS[@]}"; do
+        kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    done
+}
+trap cleanup EXIT
+
+launch_background() {
+    log "Starting: $*"
+    setsid "$@" &
+    LAUNCH_PIDS+=("$!")
+}
+
 source /opt/ros/jazzy/setup.bash
 if [ -f "install/setup.bash" ]; then
     source install/setup.bash
@@ -6,30 +33,48 @@ fi
 
 
 
-pkill -9 -f "ros|gz|gazebo|rviz|ruby|python3" || true
-sleep 2
-ros2 daemon stop && ros2 daemon start
+if [ "${SPOODER_SKIP_CLEANUP:-0}" = "1" ]; then
+    log "Skipping old process cleanup"
+else
+    log "Stopping old ROS/Gazebo/RViz processes"
+    pkill -9 -f "ros|gz|gazebo|rviz|ruby|python3" || true
+    sleep 2
+fi
+ros2 daemon stop || true
+ros2 daemon start
 sleep 1
 
+log "Building Spooder packages"
 colcon build --symlink-install --packages-select spooder_description spooder_gazebo spooder_navigation spooder_control spooder_perception
 source install/setup.bash
 
 
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-ros2 launch spooder_gazebo 01_sim_world.launch.py headless:=false &
+launch_background ros2 launch spooder_gazebo 01_sim_world.launch.py headless:=false
 sleep 5
 
-ros2 launch spooder_gazebo 02_robot_spawn.launch.py &
+launch_background ros2 launch spooder_gazebo 02_robot_spawn.launch.py spawn_x:=1.0
 sleep 10 # Wait for spawner and EKF to stabilize
 
-ros2 launch spooder_navigation slam.launch.py &
+launch_background ros2 launch spooder_navigation slam.launch.py
 sleep 5
 
-ros2 launch spooder_navigation navigation.launch.py &
+launch_background ros2 launch spooder_navigation navigation.launch.py
 sleep 5
 
-ros2 launch spooder_perception perception.launch.py &
+log "Starting RViz"
+setsid ros2 launch spooder_gazebo 04_viz.launch.py &
+RVIZ_PID="$!"
+LAUNCH_PIDS+=("$RVIZ_PID")
+sleep 3
+if ! kill -0 "$RVIZ_PID" 2>/dev/null; then
+    log "RViz exited during startup; check the RViz error above."
+    wait "$RVIZ_PID"
+fi
+
+launch_background ros2 launch spooder_perception perception.launch.py
 sleep 10 # Wait for lifecycle manager to activate all 11 nodes
 
-ros2 launch spooder_gazebo 04_viz.launch.py
+log "Startup complete. RViz is running; close RViz or press Ctrl-C to stop Spooder."
+wait "$RVIZ_PID"

@@ -7,7 +7,7 @@
     <link name="lidar_link">
       <visual>
         <geometry>
-          <cylinder radius="0.05" length="0.07"/>
+          <cylinder radius="0.015" length="0.018"/>
         </geometry>
         <material name="lidar_black">
           <color rgba="0.1 0.1 0.1 1"/>
@@ -15,7 +15,7 @@
       </visual>
       <collision>
         <geometry>
-          <cylinder radius="0.05" length="0.07"/>
+          <cylinder radius="0.015" length="0.018"/>
         </geometry>
       </collision>
       <inertial>
@@ -28,21 +28,20 @@
     <joint name="lidar_joint" type="fixed">
       <parent link="${parent}"/>
       <child link="lidar_link"/>
-      <!-- High mount: 0.35m above base_link to avoid leg occlusion -->
-      <origin xyz="0 0 0.35" rpy="0 0 0"/>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
     </joint>
 
     <!-- Visual Mount (Stand) -->
     <joint name="lidar_mount_joint" type="fixed">
       <parent link="${parent}"/>
       <child link="lidar_mount"/>
-      <origin xyz="0 0 0.175" rpy="0 0 0"/> <!-- Halfway up -->
+      <origin xyz="0 0 0.10" rpy="0 0 0"/>
     </joint>
 
     <link name="lidar_mount">
       <visual>
         <geometry>
-          <cylinder radius="0.02" length="0.35"/>
+          <cylinder radius="0.004" length="0.10"/>
         </geometry>
         <material name="grey">
           <color rgba="0.5 0.5 0.5 1"/>
@@ -50,7 +49,7 @@
       </visual>
       <collision>
          <geometry>
-          <cylinder radius="0.02" length="0.35"/>
+          <cylinder radius="0.004" length="0.11"/>
         </geometry>
       </collision>
     </link>

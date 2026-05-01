@@ -15,10 +15,20 @@ def generate_launch_description():
     perception_dir = get_package_share_directory('spooder_perception')
     
     # Config files
-    pointcloud_saver_params = os.path.join(
+    pointcloud_params = os.path.join(
         perception_dir,
         'config',
         'pointcloud_saver_params.yaml'
+    )
+
+    # Change-aware live stream for Nav2/terrain analysis. The saver below still
+    # consumes raw camera points so the persistent map keeps accumulating.
+    pointcloud_optimizer_node = Node(
+        package='spooder_perception',
+        executable='pointcloud_optimizer',
+        name='pointcloud_optimizer',
+        output='screen',
+        parameters=[pointcloud_params],
     )
     
     # Point Cloud Saver Node
@@ -27,7 +37,7 @@ def generate_launch_description():
         executable='pointcloud_saver',
         name='pointcloud_saver',
         output='screen',
-        parameters=[pointcloud_saver_params],
+        parameters=[pointcloud_params],
     )
     
     # Terrain Analyzer Node
@@ -36,9 +46,11 @@ def generate_launch_description():
         executable='terrain_analyzer',
         name='terrain_analyzer',
         output='screen',
+        parameters=[pointcloud_params],
     )
     
     return LaunchDescription([
+        pointcloud_optimizer_node,
         pointcloud_saver_node,
         terrain_analyzer_node,
     ])
