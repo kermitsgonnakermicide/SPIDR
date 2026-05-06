@@ -183,6 +183,37 @@ planner_server:
       cost_travel_multiplier: 2.0
       use_final_approach_orientation: false
 
+octomap_goal_planner:
+  ros__parameters:
+    use_sim_time: True
+    grid_topic: /terrain/traversability
+    goal_topic: /octomap_goal
+    plan_topic: /octomap_plan
+    global_frame: map
+    base_frame: spooder/base_footprint
+    navigate_action: /navigate_through_poses
+    send_to_nav2: true
+    lethal_threshold: 90
+    cost_weight: 3.0
+    waypoint_spacing: 0.45
+    goal_search_radius_cells: 12
+    max_expansions: 120000
+
+octomap_trajectory_planner:
+  ros__parameters:
+    use_sim_time: True
+    plan_topic: /octomap_plan
+    grid_topic: /terrain/traversability
+    trajectory_topic: /octomap_trajectory
+    trajectory_path_topic: /octomap_trajectory_path
+    global_frame: map
+    joint_name: base_link
+    sample_spacing: 0.10
+    free_speed: 0.18
+    climb_speed: 0.08
+    slow_cost_threshold: 20
+    lethal_threshold: 90
+
 global_costmap:
   global_costmap:
     ros__parameters:

@@ -16,6 +16,11 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file',
         default=os.path.join(pkg_spooder_navigation, 'config', 'nav2_params.yaml'))
     use_unstuck_monitor = LaunchConfiguration('use_unstuck_monitor', default='false')
+    use_octomap_planner = LaunchConfiguration('use_octomap_planner', default='true')
+    use_octomap_trajectory_planner = LaunchConfiguration(
+        'use_octomap_trajectory_planner',
+        default='true',
+    )
     
     autostart = LaunchConfiguration('autostart', default='true')
     use_composition = LaunchConfiguration('use_composition', default='True')
@@ -42,6 +47,24 @@ def generate_launch_description():
         condition=IfCondition(use_unstuck_monitor),
     )
 
+    octomap_goal_planner_node = Node(
+        package='spooder_navigation',
+        executable='octomap_goal_planner',
+        name='octomap_goal_planner',
+        output='screen',
+        parameters=[params_file, {'use_sim_time': use_sim_time}],
+        condition=IfCondition(use_octomap_planner),
+    )
+
+    octomap_trajectory_planner_node = Node(
+        package='spooder_navigation',
+        executable='octomap_trajectory_planner',
+        name='octomap_trajectory_planner',
+        output='screen',
+        parameters=[params_file, {'use_sim_time': use_sim_time}],
+        condition=IfCondition(use_octomap_trajectory_planner),
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time', 
@@ -55,7 +78,17 @@ def generate_launch_description():
             'use_unstuck_monitor',
             default_value='false',
             description='Enable the custom recovery monitor in addition to Nav2 recoveries'),
+        DeclareLaunchArgument(
+            'use_octomap_planner',
+            default_value='true',
+            description='Route RViz goals through the OctoMap traversability planner'),
+        DeclareLaunchArgument(
+            'use_octomap_trajectory_planner',
+            default_value='true',
+            description='Publish speed-timed trajectories from OctoMap terrain plans'),
         
         nav2_launch,
         unstuck_monitor_node,
+        octomap_goal_planner_node,
+        octomap_trajectory_planner_node,
     ])

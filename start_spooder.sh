@@ -31,12 +31,6 @@ if [ -f "install/setup.bash" ]; then
     source install/setup.bash
 fi
 
-if ! ros2 pkg prefix octomap_server >/dev/null 2>&1; then
-    log "Missing ROS package: octomap_server"
-    log "Install it with: sudo apt-get install -y ros-jazzy-octomap-server ros-jazzy-octomap-ros"
-    exit 1
-fi
-
 
 if [ "${SPOODER_SKIP_CLEANUP:-0}" = "1" ]; then
     log "Skipping old process cleanup"
@@ -48,6 +42,19 @@ fi
 ros2 daemon stop || true
 ros2 daemon start
 sleep 1
+
+if [ -d "src/octomap_mapping/octomap_server" ]; then
+    log "Building local OctoMap source packages"
+    colcon build --symlink-install --packages-select octomap_server octomap_mapping --cmake-args -DBUILD_TESTING=OFF
+    source install/setup.bash
+fi
+
+if ! ros2 pkg prefix octomap_server >/dev/null 2>&1; then
+    log "Missing ROS package: octomap_server"
+    log "Install it with: sudo apt-get install -y ros-jazzy-octomap-server ros-jazzy-octomap-ros"
+    log "Or clone source with: git clone --branch ros2 https://github.com/OctoMap/octomap_mapping.git src/octomap_mapping"
+    exit 1
+fi
 
 log "Building Spooder packages"
 colcon build --symlink-install --packages-select spooder_description spooder_gazebo spooder_navigation spooder_control spooder_perception

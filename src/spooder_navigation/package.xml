@@ -12,6 +12,8 @@
   <depend>nav_msgs</depend>
   <depend>std_msgs</depend>
   <depend>nav2_msgs</depend>
+  <depend>trajectory_msgs</depend>
+  <depend>tf2_ros</depend>
   <depend>nav2_bringup</depend>
   <depend>slam_toolbox</depend>
   <exec_depend>nav2_rviz_plugins</exec_depend>

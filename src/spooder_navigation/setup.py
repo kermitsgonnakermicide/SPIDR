@@ -30,6 +30,8 @@ setup(
     entry_points={
         'console_scripts': [
             'unstuck_monitor = spooder_navigation.unstuck_monitor:main',
+            'octomap_goal_planner = spooder_navigation.octomap_goal_planner:main',
+            'octomap_trajectory_planner = spooder_navigation.octomap_trajectory_planner:main',
         ],
     },
 )
