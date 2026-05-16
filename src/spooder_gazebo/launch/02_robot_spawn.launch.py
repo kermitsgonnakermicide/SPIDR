@@ -1,12 +1,25 @@
 import os
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 import launch_ros.parameter_descriptions
 
+
+def require_ros_package(package_name, apt_package):
+    try:
+        get_package_share_directory(package_name)
+    except PackageNotFoundError as exc:
+        raise RuntimeError(
+            f"Missing ROS package '{package_name}'. Install it with: "
+            f"sudo apt-get install -y {apt_package}"
+        ) from exc
+
+
 def generate_launch_description():
+    require_ros_package('gz_ros2_control', 'ros-jazzy-gz-ros2-control')
+
     pkg_spooder_description = get_package_share_directory('spooder_description')
     pkg_spooder_control = get_package_share_directory('spooder_control')
 
@@ -50,18 +63,31 @@ def generate_launch_description():
 
 
     # 3. Controllers
-    # These depend on the Gazebo plugin loading the model first. 
-    # We add a delay to be safe, but they will retry if not ready.
+    joint_state_broadcaster = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'joint_state_broadcaster',
+            '--controller-manager', '/controller_manager',
+            '--controller-manager-timeout', '60'
+        ],
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}]
+    )
+
     controller = Node(
         package='controller_manager',
         executable='spawner',
-        arguments=['spooder_controller'],
+        arguments=[
+            'spooder_controller',
+            '--controller-manager', '/controller_manager',
+            '--controller-manager-timeout', '60'
+        ],
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}]
     )
     
-    # 4. Gait Controller (The Python script)
-    # Added try-catch in script, safe to launch
+    # 4. Gait Controller
     gait_controller = Node(
         package='spooder_control',
         executable='gait_controller',
@@ -69,8 +95,7 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
-    # 5. EKF (Localization)
-    # Needs Odom from bridge + IMU
+    # 5. EKF
     ekf = Node(
         package='robot_localization',
         executable='ekf_node',
@@ -79,8 +104,7 @@ def generate_launch_description():
         parameters=[
             os.path.join(pkg_spooder_control, 'config', 'ekf.yaml'),
             {'use_sim_time': use_sim_time}
-        ],
-        remappings=[('odometry/filtered', 'odometry/filtered')]
+        ]
     )
 
     return LaunchDescription([
@@ -90,17 +114,12 @@ def generate_launch_description():
         DeclareLaunchArgument('spawn_z', default_value='0.2'),
         DeclareLaunchArgument('spawn_yaw', default_value='0.0'),
         
-        # Immediate TF
         robot_state_publisher,
-        
-        # Spawn
         spawn_entity,
         
-        # Wait for spawn -> load the position controller.
-        # joint_state_broadcaster currently segfaults inside gz_ros2_control on activation.
-        TimerAction(period=5.0, actions=[controller]),
-        
-        # Start Logic
-        TimerAction(period=12.0, actions=[ekf]),
-        TimerAction(period=15.0, actions=[gait_controller]),
+        # Sequence
+        TimerAction(period=2.0, actions=[joint_state_broadcaster]),
+        TimerAction(period=4.0, actions=[controller]),
+        TimerAction(period=6.0, actions=[ekf]),
+        TimerAction(period=8.0, actions=[gait_controller]),
     ])

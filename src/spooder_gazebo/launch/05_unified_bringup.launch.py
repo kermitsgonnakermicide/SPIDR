@@ -5,9 +5,21 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
+
+
+def require_ros_package(package_name, apt_package):
+    try:
+        get_package_share_directory(package_name)
+    except PackageNotFoundError as exc:
+        raise RuntimeError(
+            f"Missing ROS package '{package_name}'. Install it with: "
+            f"sudo apt-get install -y {apt_package}"
+        ) from exc
 
 def generate_launch_description():
+    require_ros_package('gz_ros2_control', 'ros-jazzy-gz-ros2-control')
+
     # 1. Setup paths
     pkg_spooder_description = get_package_share_directory('spooder_description')
     pkg_spooder_gazebo = get_package_share_directory('spooder_gazebo')
@@ -82,6 +94,14 @@ def generate_launch_description():
         parameters=[nav2_params, {'use_sim_time': True}]
     )
 
+    behavior_server = Node(
+        package='nav2_behaviors',
+        executable='behavior_server',
+        name='behavior_server',
+        output='screen',
+        parameters=[nav2_params, {'use_sim_time': True}]
+    )
+
     bt_navigator = Node(
         package='nav2_bt_navigator',
         executable='bt_navigator',
@@ -98,7 +118,7 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': True,
             'autostart': True,
-            'node_names': ['slam_toolbox', 'planner_server', 'controller_server', 'bt_navigator']
+            'node_names': ['planner_server', 'controller_server', 'behavior_server', 'bt_navigator']
         }]
     )
 
@@ -122,6 +142,7 @@ def generate_launch_description():
         TimerAction(period=15.0, actions=[
             controller_server,
             planner_server,
+            behavior_server,
             bt_navigator,
             lifecycle_manager
         ]),

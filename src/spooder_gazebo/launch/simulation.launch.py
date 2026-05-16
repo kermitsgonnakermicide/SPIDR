@@ -3,7 +3,7 @@ MINIMAL WORKING SIMULATION LAUNCH FILE
 This is stripped down to the bare essentials to ensure it works.
 """
 import os
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, TimerAction, ExecuteProcess
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -12,7 +12,19 @@ from launch_ros.actions import Node
 import launch_ros.parameter_descriptions
 
 
+def require_ros_package(package_name, apt_package):
+    try:
+        get_package_share_directory(package_name)
+    except PackageNotFoundError as exc:
+        raise RuntimeError(
+            f"Missing ROS package '{package_name}'. Install it with: "
+            f"sudo apt-get install -y {apt_package}"
+        ) from exc
+
+
 def generate_launch_description():
+    require_ros_package('gz_ros2_control', 'ros-jazzy-gz-ros2-control')
+
     # Package directories
     pkg_spooder_gazebo = get_package_share_directory('spooder_gazebo')
     pkg_spooder_description = get_package_share_directory('spooder_description')
@@ -63,7 +75,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'robot_description': launch_ros.parameter_descriptions.ParameterValue(robot_description, value_type=str),
-            'use_sim_time': use_sim_time
+            'use_sim_time': use_sim_time,
+            'frame_prefix': 'spooder/'
         }]
     )
 
