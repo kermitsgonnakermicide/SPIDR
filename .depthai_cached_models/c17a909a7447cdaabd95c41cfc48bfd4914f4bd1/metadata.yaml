@@ -1,0 +1,6 @@
+hash: 43009930bf4899f9d058c198531dda93
+model_id: aim_D4P8jj47eKb3P7vcct2TrG
+model_version_id: aimv_MzYJf7hTGguvvDgd3w3PVh
+model_instance_id: aimi_9Zw4p79P9F1k6aefH3NnzT
+downloaded_files:
+  - deeplab_v3_plus_mnv2_decoder_256_openvino_2021-4.rvc2.tar.xz
