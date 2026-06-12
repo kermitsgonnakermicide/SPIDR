@@ -75,6 +75,12 @@ class OctomapGoalPlanner(Node):
             self.goal_callback,
             10,
         )
+        self.goal_3d_sub = self.create_subscription(
+            PoseStamped,
+            '/spooder/goal_3d',
+            self.goal_callback,
+            10,
+        )
         self.plan_pub = self.create_publisher(Path, self.plan_topic, map_qos)
         self.nav_client = ActionClient(
             self,
@@ -104,16 +110,17 @@ class OctomapGoalPlanner(Node):
             self.get_logger().warn('No /terrain/traversability grid yet; cannot plan.')
             return
 
-        robot_xy = self.lookup_robot_xy()
-        if robot_xy is None:
+        robot_xyz = self.lookup_robot_xyz()
+        if robot_xyz is None:
+            return
+        robot_z = robot_xyz[2]
+
+        goal_xyz = self.pose_xyz_in_global_frame(goal_msg)
+        if goal_xyz is None:
             return
 
-        goal_xy = self.pose_xy_in_global_frame(goal_msg)
-        if goal_xy is None:
-            return
-
-        start = self.world_to_cell(grid_msg, *robot_xy)
-        goal = self.world_to_cell(grid_msg, *goal_xy)
+        start = self.world_to_cell(grid_msg, *robot_xyz[:2])
+        goal = self.world_to_cell(grid_msg, *goal_xyz[:2])
         if start is None or goal is None:
             self.get_logger().warn('Start or goal is outside the terrain grid.')
             return
@@ -129,7 +136,7 @@ class OctomapGoalPlanner(Node):
             self.get_logger().warn('OctoMap terrain planner could not find a route.')
             return
 
-        path = self.cells_to_path(grid_msg, cells)
+        path = self.cells_to_path(grid_msg, cells, robot_z, goal_xyz[2])
         self.plan_pub.publish(path)
         self.get_logger().info(
             f'Published OctoMap terrain plan with {len(path.poses)} poses.'
@@ -138,7 +145,7 @@ class OctomapGoalPlanner(Node):
         if self.send_to_nav2:
             self.send_waypoints(path)
 
-    def lookup_robot_xy(self):
+    def lookup_robot_xyz(self):
         try:
             transform = self.tf_buffer.lookup_transform(
                 self.global_frame,
@@ -154,14 +161,15 @@ class OctomapGoalPlanner(Node):
             return None
 
         translation = transform.transform.translation
-        return float(translation.x), float(translation.y)
+        return float(translation.x), float(translation.y), float(translation.z)
 
-    def pose_xy_in_global_frame(self, pose_msg):
+    def pose_xyz_in_global_frame(self, pose_msg):
         frame_id = pose_msg.header.frame_id or self.global_frame
         x = float(pose_msg.pose.position.x)
         y = float(pose_msg.pose.position.y)
+        z = float(pose_msg.pose.position.z)
         if frame_id == self.global_frame:
-            return x, y
+            return x, y, z
 
         try:
             transform = self.tf_buffer.lookup_transform(
@@ -177,7 +185,8 @@ class OctomapGoalPlanner(Node):
             return None
 
         transformed = self.transform_xy(x, y, transform)
-        return transformed[0], transformed[1]
+        tz = float(transform.transform.translation.z)
+        return transformed[0], transformed[1], tz + z
 
     @staticmethod
     def transform_xy(x, y, transform):
@@ -284,7 +293,7 @@ class OctomapGoalPlanner(Node):
         path.reverse()
         return path
 
-    def cells_to_path(self, grid_msg, cells):
+    def cells_to_path(self, grid_msg, cells, z_start=0.0, z_goal=0.0):
         path = Path()
         path.header.stamp = self.get_clock().now().to_msg()
         path.header.frame_id = self.global_frame
@@ -295,6 +304,7 @@ class OctomapGoalPlanner(Node):
         if selected[-1] != cells[-1]:
             selected.append(cells[-1])
 
+        total_cells = len(selected)
         for index, cell in enumerate(selected):
             pose = PoseStamped()
             pose.header = path.header
@@ -302,9 +312,10 @@ class OctomapGoalPlanner(Node):
                 grid_msg,
                 cell,
             )
-            pose.pose.position.z = 0.0
+            progress = index / max(total_cells - 1, 1)
+            pose.pose.position.z = z_start + (z_goal - z_start) * progress
 
-            next_cell = selected[min(index + 1, len(selected) - 1)]
+            next_cell = selected[min(index + 1, total_cells - 1)]
             next_x, next_y = self.cell_center(grid_msg, next_cell)
             yaw = math.atan2(
                 next_y - pose.pose.position.y,

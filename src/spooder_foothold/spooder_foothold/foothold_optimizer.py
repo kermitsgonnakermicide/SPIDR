@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32, Float64MultiArray, Header
+from std_msgs.msg import Float32, Float64MultiArray
+from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
@@ -8,10 +9,11 @@ from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
 import numpy as np
 import math
+from collections import deque
 
 from spooder_foothold.voxel_map import VoxelMap
 from spooder_foothold.candidate_sampler import sample_polar_grid, filter_by_reachability
-from spooder_foothold.terrain_features import extract_all, compute_cost
+from spooder_foothold.terrain_features import compute_total_cost
 
 
 LEG_PARAMS = {
@@ -55,6 +57,11 @@ class FootholdOptimizer(Node):
         super().__init__('foothold_optimizer')
         self.get_logger().info('FootholdOptimizer starting')
 
+        self.declare_parameter('timer_period', 0.1)
+        self.declare_parameter('default_z', -0.12)
+        self.declare_parameter('stride_amp', 0.3)
+        self.declare_parameter('step_height', 0.05)
+
         self.voxel_map = VoxelMap(resolution=0.05, neighbor_radius=0.15)
 
         self.tf_buffer = Buffer()
@@ -72,6 +79,12 @@ class FootholdOptimizer(Node):
             self.gait_phase_callback, 10
         )
 
+        self.goal_3d_sub = self.create_subscription(
+            PoseStamped,
+            '/spooder/goal_3d',
+            self.goal_3d_callback, 10
+        )
+
         self.target_pub = self.create_publisher(
             Float64MultiArray,
             '/spooder/foothold_targets', 10
@@ -84,17 +97,34 @@ class FootholdOptimizer(Node):
             MarkerArray,
             '/spooder/foothold_selected', 10
         )
+        self.body_height_pub = self.create_publisher(
+            Float32,
+            '/spooder/target_body_height', 10
+        )
 
         self.gait_phase = 0.0
-        self.gait_speed = 4.0
         self.last_gait_time = self.get_clock().now()
-        self.default_z = -0.12
-        self.step_height = 0.05
-        self.stride_amp = 0.07
-        self.timer_period = 0.05
+        self.default_z = self.get_parameter('default_z').value
+        self.step_height = self.get_parameter('step_height').value
+        self.stride_amp = self.get_parameter('stride_amp').value
+        self.timer_period = self.get_parameter('timer_period').value
 
-        self.optimizer_timer = self.create_timer(0.1, self.optimize_callback)
-        self.get_logger().info('FootholdOptimizer initialized')
+        self.target_goal_z = 0.0
+        self.target_body_lift = 0.0
+        self.current_body_lift = 0.0
+        self.goal_z_timeout = 5.0
+        self.last_goal_stamp = self.get_clock().now()
+
+        self.leg_origins_body = [
+            np.array([LEG_PARAMS[n]['x_off'], LEG_PARAMS[n]['y_off'], 0.0])
+            for n in LEG_NAMES
+        ]
+
+        self.prev_footholds_map = deque(maxlen=12)
+        self.current_footholds_map = {}
+
+        self.optimizer_timer = self.create_timer(self.timer_period, self.optimize_callback)
+        self.get_logger().info('FootholdOptimizer initialized with Phase 2 costs')
 
     def octomap_callback(self, msg):
         points = pointcloud2_to_numpy(msg)
@@ -104,6 +134,18 @@ class FootholdOptimizer(Node):
     def gait_phase_callback(self, msg):
         self.gait_phase = msg.data
         self.last_gait_time = self.get_clock().now()
+
+    def goal_3d_callback(self, msg):
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                'map', msg.header.frame_id, rclpy.time.Time())
+            t = transform.transform.translation
+            self.target_goal_z = t.z + msg.pose.position.z
+        except Exception:
+            self.target_goal_z = msg.pose.position.z
+        self.target_body_lift = max(0.0, self.target_goal_z)
+        self.last_goal_stamp = self.get_clock().now()
+        self.get_logger().info(f'3D goal z={self.target_goal_z:.3f}, body lift target={self.target_body_lift:.3f}')
 
     def nominal_foot_in_base_footprint(self, leg_name, leg_idx):
         params = LEG_PARAMS[leg_name]
@@ -125,6 +167,8 @@ class FootholdOptimizer(Node):
         return foot_in_base_footprint
 
     def optimize_callback(self):
+        t_start = self.get_clock().now()
+
         if not self.voxel_map.is_updated:
             return
 
@@ -136,6 +180,23 @@ class FootholdOptimizer(Node):
             robot_z = transform.transform.translation.z
         except Exception:
             return
+
+        goal_age = (self.get_clock().now() - self.last_goal_stamp).nanoseconds * 1e-9
+        valid_goal = goal_age < self.goal_z_timeout and self.target_body_lift > 0.01
+        if valid_goal:
+            smooth_rate = 0.02
+            if self.current_body_lift < self.target_body_lift:
+                self.current_body_lift = min(
+                    self.current_body_lift + smooth_rate, self.target_body_lift)
+            elif self.current_body_lift > self.target_body_lift:
+                self.current_body_lift = max(
+                    self.current_body_lift - smooth_rate, self.target_body_lift)
+        else:
+            self.current_body_lift *= 0.95
+
+        body_height_msg = Float32()
+        body_height_msg.data = float(self.current_body_lift)
+        self.body_height_pub.publish(body_height_msg)
 
         phase = self.gait_phase
         optimized_targets = []
@@ -169,14 +230,28 @@ class FootholdOptimizer(Node):
 
                 if surface_candidates:
                     cand_arr = np.array(surface_candidates, dtype=np.float32)
-                    features = extract_all(self.voxel_map, cand_arr)
-                    if len(features) > 0:
-                        costs = compute_cost(features)
+                    cand_bf = cand_arr - np.array([[robot_x, robot_y, robot_z]])
+
+                    active_leg_mask = [False] * 6
+                    for j in range(6):
+                        gj = LEG_PARAMS[LEG_NAMES[j]]['tripod']
+                        gj_offset = math.pi if gj == 1 else 0.0
+                        active_leg_mask[j] = math.sin(phase + gj_offset) > 0
+
+                    costs = compute_total_cost(
+                        self.voxel_map, cand_arr,
+                        self.leg_origins_body, active_leg_mask,
+                        self.prev_footholds_map, i,
+                        default_z=self.default_z,
+                    )
+
+                    if len(costs) > 0:
                         best_idx = int(np.argmin(costs))
                         best_candidate = cand_arr[best_idx]
+                        self.current_footholds_map[i] = best_candidate.tolist()
 
-                        self.publish_candidates(cand_arr, robot_x, robot_y, robot_z)
-                        self.publish_selected(best_candidate, robot_x, robot_y, robot_z)
+                        self.publish_candidates(cand_arr)
+                        self.publish_selected(best_candidate)
                     else:
                         best_candidate = nominal_map
                 else:
@@ -195,7 +270,19 @@ class FootholdOptimizer(Node):
         msg.data = optimized_targets
         self.target_pub.publish(msg)
 
-    def publish_candidates(self, candidates, robot_x, robot_y, robot_z):
+        if len(self.prev_footholds_map) >= 12:
+            self.prev_footholds_map.pop()
+        if self.current_footholds_map:
+            avg_foothold = np.mean(list(self.current_footholds_map.values()), axis=0)
+            self.prev_footholds_map.append(avg_foothold)
+
+        dt = (self.get_clock().now() - t_start).nanoseconds * 1e-6
+        if dt > self.timer_period * 1000:
+            self.get_logger().warn(
+                f'Optimizer cycle took {dt:.1f}ms (exceeds {self.timer_period*1000:.0f}ms budget)',
+                throttle_duration_sec=2.0)
+
+    def publish_candidates(self, candidates):
         if not candidates or len(candidates) == 0:
             return
         marker_array = MarkerArray()
@@ -214,7 +301,7 @@ class FootholdOptimizer(Node):
         marker_array.markers.append(marker)
         self.candidates_pub.publish(marker_array)
 
-    def publish_selected(self, candidate, robot_x, robot_y, robot_z):
+    def publish_selected(self, candidate):
         marker_array = MarkerArray()
         marker = Marker()
         marker.header.frame_id = 'map'

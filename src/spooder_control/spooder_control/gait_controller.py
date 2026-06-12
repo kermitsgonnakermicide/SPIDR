@@ -13,11 +13,19 @@ TRIPOD_GROUPS = [0, 1, 0, 1, 0, 1]
 LEG_X_OFF = [0.0835, 0.0, -0.0835, 0.0835, 0.0, -0.0835]
 LEG_Y_OFF = [-0.063, -0.063, -0.063, 0.063, 0.063, 0.063]
 BASE_FOOTPRINT_TO_BASE_LINK_Z = 0.154
+CMD_VEL_TIMEOUT = 0.5
 
 
 class GaitController(Node):
     def __init__(self):
         super().__init__('gait_controller')
+
+        self.declare_parameter('stride_amp', 0.3)
+        self.declare_parameter('gait_speed', 6.0)
+        self.declare_parameter('timer_period', 0.05)
+        self.declare_parameter('default_z', -0.12)
+        self.declare_parameter('base_step_height', 0.05)
+
         self.publisher_ = self.create_publisher(Float64MultiArray, '/spooder_controller/commands', 10)
 
         self.cmd_vel_sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
@@ -28,28 +36,33 @@ class GaitController(Node):
         self.foothold_sub = self.create_subscription(
             Float64MultiArray, '/spooder/foothold_targets', self.foothold_callback, 10)
 
+        self.body_height_sub = self.create_subscription(
+            Float32, '/spooder/target_body_height', self.body_height_callback, 10)
+
         self.gait_phase_pub = self.create_publisher(Float32, '/spooder/gait_phase', 10)
 
         self.get_logger().info("Gait Controller Initialized with Per-Leg Foothold Override")
 
         self.ik = IKSolver(coxa_len=0.043, femur_len=0.060, tibia_len=0.104)
 
-        self.timer_period = 0.05
+        self.timer_period = self.get_parameter('timer_period').value
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
 
         self.vel_x = 0.0
         self.vel_yaw = 0.0
+        self.last_cmd_vel_stamp = self.get_clock().now()
 
         self.phase = 0.0
-        self.gait_speed = 4.0
+        self.gait_speed = self.get_parameter('gait_speed').value
+        self.stride_amp = self.get_parameter('stride_amp').value
 
         self.body_length = 0.167
         self.body_width = 0.126
 
-        self.default_z = -0.12
+        self.default_z = self.get_parameter('default_z').value
         self.first_run = True
 
-        self.base_step_height = 0.05
+        self.base_step_height = self.get_parameter('base_step_height').value
         self.elevated_step_height = 0.18
         self.current_step_height = self.base_step_height
         self.step_height_transition_rate = 0.02
@@ -65,12 +78,20 @@ class GaitController(Node):
         self.foothold_targets_received = False
         self.last_foothold_stamp = self.get_clock().now()
 
+        self.get_logger().info(
+            f'  stride_amp={self.stride_amp}, gait_speed={self.gait_speed}, '
+            f'timer_period={self.timer_period}s')
+
     def terrain_height_callback(self, msg):
         self.terrain_max_height = msg.data
+
+    def body_height_callback(self, msg):
+        self.target_body_lift = max(self.target_body_lift, msg.data)
 
     def cmd_vel_callback(self, msg):
         self.vel_x = msg.linear.x
         self.vel_yaw = msg.angular.z
+        self.last_cmd_vel_stamp = self.get_clock().now()
 
     def foothold_callback(self, msg):
         if len(msg.data) >= 18:
@@ -117,6 +138,11 @@ class GaitController(Node):
             self.current_body_lift = max(self.current_body_lift - self.body_lift_smooth_rate, self.target_body_lift)
 
         msg = Float64MultiArray()
+
+        cmd_vel_age = (self.get_clock().now() - self.last_cmd_vel_stamp).nanoseconds * 1e-9
+        if cmd_vel_age > CMD_VEL_TIMEOUT:
+            self.vel_x = 0.0
+            self.vel_yaw = 0.0
 
         if abs(self.vel_x) > 0.001 or abs(self.vel_yaw) > 0.001:
             self.phase += self.gait_speed * self.timer_period
@@ -165,18 +191,17 @@ class GaitController(Node):
                 ])
                 continue
 
-            stride_amp = 0.07
             cycle_val = math.cos(current_phase)
             cos_yaw = math.cos(LEG_YAW[i])
             sin_yaw = math.sin(LEG_YAW[i])
 
-            input_vx = -self.vel_x * stride_amp
+            input_vx = -self.vel_x * self.stride_amp
             local_vx = input_vx * cos_yaw
             local_vy = -input_vx * sin_yaw
 
             x_off = local_vx * cycle_val
             y_off = local_vy * cycle_val
-            y_off += -self.vel_yaw * 0.1 * cycle_val
+            y_off += -self.vel_yaw * self.stride_amp * 0.5 * cycle_val
 
             z_val = self.default_z - self.current_body_lift
             if in_swing:
