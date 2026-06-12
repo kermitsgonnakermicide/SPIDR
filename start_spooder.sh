@@ -73,7 +73,7 @@ if ! ros2 pkg prefix octomap_server >/dev/null 2>&1; then
 fi
 
 log "Building Spooder packages"
-colcon build --symlink-install --packages-select spooder_description spooder_gazebo spooder_navigation spooder_control spooder_perception
+colcon build --symlink-install --packages-select spooder_description spooder_gazebo spooder_navigation spooder_control spooder_perception spooder_foothold
 source install/setup.bash
 
 

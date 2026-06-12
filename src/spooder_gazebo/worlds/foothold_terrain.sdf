@@ -1,0 +1,304 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="foothold_terrain">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="libgz-sim-physics-system.so" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="libgz-sim-scene-broadcaster-system.so" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="libgz-sim-contact-system.so" name="gz::sim::systems::Contact"/>
+
+    <scene>
+      <ambient>.4 .4 .4</ambient>
+      <sky></sky>
+    </scene>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- Ground Plane -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><plane><normal>0 0 1</normal><size>40 40</size></plane></geometry></collision>
+        <visual name="v">
+          <geometry><plane><normal>0 0 1</normal><size>40 40</size></plane></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================ -->
+    <!-- SECTION 1: STEPPED PLATFORMS (0.05-0.25m)    -->
+    <!-- ============================================ -->
+
+    <model name="step_005">
+      <pose>2.0 -1.0 0.025 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.8 0.6 0.05</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.8 0.6 0.05</size></box></geometry>
+        <material><ambient>0.5 0.3 0.1 1</ambient><diffuse>0.5 0.3 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="step_010">
+      <pose>2.5 -1.0 0.05 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.8 0.6 0.10</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.8 0.6 0.10</size></box></geometry>
+        <material><ambient>0.6 0.3 0.1 1</ambient><diffuse>0.6 0.3 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="step_015">
+      <pose>3.0 -1.0 0.075 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.8 0.6 0.15</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.8 0.6 0.15</size></box></geometry>
+        <material><ambient>0.7 0.3 0.1 1</ambient><diffuse>0.7 0.3 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="step_020">
+      <pose>3.5 -1.0 0.10 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.8 0.6 0.20</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.8 0.6 0.20</size></box></geometry>
+        <material><ambient>0.8 0.3 0.1 1</ambient><diffuse>0.8 0.3 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="step_025">
+      <pose>4.0 -1.0 0.125 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.8 0.6 0.25</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.8 0.6 0.25</size></box></geometry>
+        <material><ambient>0.9 0.2 0.1 1</ambient><diffuse>0.9 0.2 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================ -->
+    <!-- SECTION 2: SLOPED SURFACES (15° and 25°)    -->
+    <!-- ============================================ -->
+
+    <model name="ramp_15deg">
+      <pose>2.0 0.8 0 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c">
+          <geometry><box><size>1.0 0.6 0.134</size></box></geometry>
+          <pose>0 0 0.067 0.2618 0 0</pose>
+        </collision>
+        <visual name="v">
+          <geometry><box><size>1.0 0.6 0.134</size></box></geometry>
+          <pose>0 0 0.067 0.2618 0 0</pose>
+          <material><ambient>0.4 0.5 0.3 1</ambient><diffuse>0.4 0.5 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="ramp_25deg">
+      <pose>3.5 0.8 0 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c">
+          <geometry><box><size>1.0 0.6 0.211</size></box></geometry>
+          <pose>0 0 0.1055 0.4363 0 0</pose>
+        </collision>
+        <visual name="v">
+          <geometry><box><size>1.0 0.6 0.211</size></box></geometry>
+          <pose>0 0 0.1055 0.4363 0 0</pose>
+          <material><ambient>0.4 0.6 0.3 1</ambient><diffuse>0.4 0.6 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================ -->
+    <!-- SECTION 3: RUBBLE FIELD (random block pile)  -->
+    <!-- ============================================ -->
+
+    <model name="rubble_1">
+      <pose>2.0 2.0 0.04 0 0 0.3</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.15 0.12 0.08</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.15 0.12 0.08</size></box></geometry>
+        <material><ambient>0.5 0.4 0.3 1</ambient><diffuse>0.5 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rubble_2">
+      <pose>2.3 2.1 0.06 0 0 -0.5</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 0.10 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 0.10 0.12</size></box></geometry>
+        <material><ambient>0.5 0.4 0.3 1</ambient><diffuse>0.5 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rubble_3">
+      <pose>1.8 2.3 0.05 0 0 0.8</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.10 0.14 0.10</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.10 0.14 0.10</size></box></geometry>
+        <material><ambient>0.5 0.4 0.3 1</ambient><diffuse>0.5 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rubble_4">
+      <pose>2.6 1.8 0.03 0 0 -0.2</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.08 0.08 0.06</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.08 0.08 0.06</size></box></geometry>
+        <material><ambient>0.5 0.4 0.3 1</ambient><diffuse>0.5 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rubble_5">
+      <pose>2.4 2.4 0.035 0 0 0.6</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.10 0.10 0.07</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.10 0.10 0.07</size></box></geometry>
+        <material><ambient>0.5 0.4 0.3 1</ambient><diffuse>0.5 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rubble_6">
+      <pose>2.8 2.2 0.045 0 0 0.0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.18 0.10 0.09</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.18 0.10 0.09</size></box></geometry>
+        <material><ambient>0.5 0.4 0.3 1</ambient><diffuse>0.5 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rubble_7">
+      <pose>3.0 2.5 0.02 0 0 0.4</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 0.06 0.04</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 0.06 0.04</size></box></geometry>
+        <material><ambient>0.5 0.4 0.3 1</ambient><diffuse>0.5 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rubble_8">
+      <pose>3.2 2.0 0.055 0 0 -0.7</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.14 0.08 0.11</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.14 0.08 0.11</size></box></geometry>
+        <material><ambient>0.5 0.4 0.3 1</ambient><diffuse>0.5 0.4 0.3 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================ -->
+    <!-- SECTION 4: DISCRETE GAPS (flat ramps)        -->
+    <!-- ============================================ -->
+
+    <model name="gap_ramp_1">
+      <pose>4.5 2.0 0.06 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.5 0.4 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.5 0.4 0.12</size></box></geometry>
+        <material><ambient>0.3 0.3 0.5 1</ambient><diffuse>0.3 0.3 0.5 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="gap_ramp_2">
+      <pose>5.0 2.0 0.08 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.4 0.4 0.16</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.4 0.4 0.16</size></box></geometry>
+        <material><ambient>0.3 0.3 0.5 1</ambient><diffuse>0.3 0.3 0.5 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================ -->
+    <!-- SECTION 5: SLOPE TRANSITION (gradual rise)   -->
+    <!-- ============================================ -->
+
+    <model name="slope_transition">
+      <pose>4.5 -1.0 0.05 0 0 0</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c">
+          <geometry><box><size>1.2 0.6 0.10</size></box></geometry>
+          <pose>0 0 0 0.1745 0 0</pose>
+        </collision>
+        <visual name="v">
+          <geometry><box><size>1.2 0.6 0.10</size></box></geometry>
+          <pose>0 0 0 0.1745 0 0</pose>
+          <material><ambient>0.4 0.4 0.4 1</ambient><diffuse>0.4 0.4 0.4 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================ -->
+    <!-- SECTION 6: MIXED ROUGH ZONE                  -->
+    <!-- ============================================ -->
+
+    <model name="rough_zone_1">
+      <pose>5.5 0.5 0.03 0 0 0.2</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.20 0.15 0.06</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.20 0.15 0.06</size></box></geometry>
+        <material><ambient>0.6 0.5 0.4 1</ambient><diffuse>0.6 0.5 0.4 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rough_zone_2">
+      <pose>5.7 0.8 0.05 0 0 -0.3</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.15 0.20 0.10</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.15 0.20 0.10</size></box></geometry>
+        <material><ambient>0.6 0.5 0.4 1</ambient><diffuse>0.6 0.5 0.4 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rough_zone_3">
+      <pose>5.3 1.0 0.04 0 0 0.5</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.12 0.12 0.08</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.12 0.12 0.08</size></box></geometry>
+        <material><ambient>0.6 0.5 0.4 1</ambient><diffuse>0.6 0.5 0.4 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="rough_zone_4">
+      <pose>5.5 1.2 0.06 0 0 -0.1</pose>
+      <static>true</static>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.10 0.10 0.12</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.10 0.10 0.12</size></box></geometry>
+        <material><ambient>0.6 0.5 0.4 1</ambient><diffuse>0.6 0.5 0.4 1</diffuse></material></visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

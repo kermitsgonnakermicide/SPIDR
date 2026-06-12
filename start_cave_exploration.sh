@@ -12,7 +12,7 @@ sleep 2
 ros2 daemon stop && ros2 daemon start
 sleep 1
 
-colcon build --symlink-install --packages-select spooder_description spooder_gazebo spooder_navigation spooder_control spooder_perception
+colcon build --symlink-install --packages-select spooder_description spooder_gazebo spooder_navigation spooder_control spooder_perception spooder_foothold
 source install/setup.bash
 
 
