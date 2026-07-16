@@ -25,7 +25,7 @@ amcl:
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
     resample_interval: 1
-    robot_model_type: "nav2_amcl::DifferentialMotionModel" # EKF provides odom, we treat as diff for AMCL
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
     save_pose_rate: 0.5
     sigma_hit: 0.2
     tf_broadcast: true
@@ -37,6 +37,7 @@ amcl:
     z_rand: 0.5
     z_short: 0.05
     scan_topic: scan
+
 behavior_server:
   ros__parameters:
     use_sim_time: True
@@ -48,7 +49,6 @@ behavior_server:
     wait:
       plugin: "nav2_behaviors::Wait"
     cycle_frequency: 10.0
-    # Fix behaviors looking for 'odom' instead of 'spooder/odom'
     spin:
       plugin: "nav2_behaviors::Spin"
       local_frame: spooder/odom
@@ -75,73 +75,34 @@ bt_navigator:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
     navigate_through_poses:
       plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
-    # ... (Standard BT Navigator params omitted for brevity, using defaults)
-    # plugin_lib_names:
-    # - nav2_compute_path_to_pose_action_bt_node
-    # - nav2_compute_path_through_poses_action_bt_node
-    # - nav2_smooth_path_action_bt_node
-    # - nav2_follow_path_action_bt_node
-    # - nav2_spin_action_bt_node
-    # - nav2_wait_action_bt_node
-    # - nav2_assisted_teleop_action_bt_node
-    # - nav2_back_up_action_bt_node
-    # - nav2_drive_on_heading_action_bt_node
-    # - nav2_clear_costmap_service_bt_node
-    # - nav2_is_stuck_condition_bt_node
-    # - nav2_goal_reached_condition_bt_node
-    # - nav2_goal_updated_condition_bt_node
-    # - nav2_globally_updated_goal_condition_bt_node
-    # - nav2_is_path_valid_condition_bt_node
-    # - nav2_initial_pose_received_condition_bt_node
-    # - nav2_reinitialize_global_localization_service_bt_node
-    # - nav2_rate_controller_bt_node
-    # - nav2_distance_controller_bt_node
-    # - nav2_speed_controller_bt_node
-    # - nav2_truncate_path_action_bt_node
-    # - nav2_goal_updater_node_bt_node
-    # - nav2_recovery_node_bt_node
-    # - nav2_pipeline_sequence_bt_node
-    # - nav2_round_robin_node_bt_node
-    # - nav2_transform_available_condition_bt_node
-    # - nav2_time_expired_condition_bt_node
-    # - nav2_path_expirator_bt_node
-    # - nav2_number_of_recoveries_condition_bt_node
-    # - nav2_costmap_clear_costmap_service_bt_node
-    # - nav2_single_trigger_bt_node
-    # - nav2_goal_checker_selector_bt_node
-    # - nav2_controller_selector_bt_node
-    # - nav2_planner_selector_bt_node
 
 controller_server:
   ros__parameters:
     use_sim_time: True
-    controller_frequency: 10.0 # High freq for hexapod stability
+    controller_frequency: 10.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"] 
+    goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
 
-    # Progress Checker
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.1
       movement_time_allowance: 15.0
 
-    # Goal Checker
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.25
       yaw_goal_tolerance: 0.25
-    
-    # MPPI Controller - Predictive 3D Awareness
+
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
       time_steps: 56
-      model_dt: 0.100 # MUST MATCH 1/controller_frequency (10Hz)
+      model_dt: 0.100
       batch_size: 2000
       vx_std: 0.2
       vy_std: 0.2
@@ -156,7 +117,7 @@ controller_server:
       transform_tolerance: 2.0
       enforce_path_costs: true
       visualize: true
-      motion_model: "DiffDrive" # Hexapod moves like a diff drive base
+      motion_model: "DiffDrive"
       critics: ["ConstraintCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "ObstaclesCritic"]
       ConstraintCritic.cost_weight: 4.0
       GoalCritic.cost_weight: 4.0
@@ -183,66 +144,27 @@ planner_server:
       cost_travel_multiplier: 2.0
       use_final_approach_orientation: false
 
-octomap_goal_planner:
-  ros__parameters:
-    use_sim_time: True
-    grid_topic: /terrain/traversability
-    goal_topic: /octomap_goal
-    plan_topic: /octomap_plan
-    global_frame: map
-    base_frame: spooder/base_footprint
-    navigate_action: /navigate_through_poses
-    send_to_nav2: true
-    lethal_threshold: 90
-    cost_weight: 3.0
-    waypoint_spacing: 0.45
-    goal_search_radius_cells: 12
-    max_expansions: 120000
-
-octomap_trajectory_planner:
-  ros__parameters:
-    use_sim_time: True
-    plan_topic: /octomap_plan
-    grid_topic: /terrain/traversability
-    trajectory_topic: /octomap_trajectory
-    trajectory_path_topic: /octomap_trajectory_path
-    global_frame: map
-    joint_name: base_link
-    sample_spacing: 0.10
-    free_speed: 0.18
-    climb_speed: 0.08
-    slow_cost_threshold: 20
-    lethal_threshold: 90
-
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 3.0  # Increased from 1.0 for faster dynamic response
-      publish_frequency: 3.0  # Increased from 1.0
+      update_frequency: 3.0
+      publish_frequency: 3.0
       global_frame: map
       robot_base_frame: spooder/base_footprint
       use_sim_time: True
-      controller_frequency: 15.0  # Increased from 10.0 for better reactivity
-      # Diddler real-scale footprint. Keep this close to the physical body so
-      # Nav2 can plan through the test-world gaps.
       footprint: "[ [0.10, 0.10], [0.10, -0.10], [-0.10, -0.10], [-0.10, 0.10] ]"
       resolution: 0.05
       rolling_window: true
       width: 20
-      height: 8
+      height: 20
       track_unknown_space: true
-      plugins: ["octomap_terrain_layer", "obstacle_layer", "inflation_layer"]
-      octomap_terrain_layer:
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         enabled: True
-        map_topic: /terrain/traversability
-        map_subscribe_transient_local: True
-        subscribe_to_updates: False
+        map_topic: /map
+        subscribe_to_updates: True
         transform_tolerance: 2.0
-        trinary_costmap: false
-        use_maximum: true
-        lethal_cost_threshold: 100
-        unknown_cost_value: -1
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -255,19 +177,19 @@ global_costmap:
           data_type: "LaserScan"
           raytrace_max_range: 3.0
           raytrace_min_range: 0.0
-          min_obstacle_height: 0.08
+          min_obstacle_height: 0.0
           obstacle_max_range: 2.5
-          obstacle_min_range: 0.1
+          obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        inflation_radius: 0.12
+        inflation_radius: 0.30
       always_send_full_costmap: True
 
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 8.0  # Increased from 5.0 for faster dynamic response
+      update_frequency: 8.0
       publish_frequency: 2.0
       global_frame: spooder/odom
       robot_base_frame: spooder/base_footprint
@@ -290,13 +212,13 @@ local_costmap:
           data_type: "LaserScan"
           raytrace_max_range: 3.0
           raytrace_min_range: 0.0
-          min_obstacle_height: 0.08
+          min_obstacle_height: 0.0
           obstacle_max_range: 2.5
-          obstacle_min_range: 0.1
+          obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        inflation_radius: 0.12
+        inflation_radius: 0.30
       always_send_full_costmap: True
 
 collision_monitor:
@@ -305,9 +227,9 @@ collision_monitor:
     base_frame_id: "spooder/base_footprint"
     odom_frame_id: "spooder/odom"
     transform_tolerance: 0.1
-    source_timeout: 0.5 # Increased from 0.1 to handle simulation lag
+    source_timeout: 0.5
     base_shift_correction: True
-    observation_sources: ["scan"]  # Removed camera_pointcloud due to timestamp lag
+    observation_sources: ["scan"]
     polygons: ["Footprint"]
     Footprint:
       type: "polygon"
@@ -315,16 +237,11 @@ collision_monitor:
       points: "[[0.10, 0.10], [0.10, -0.10], [-0.10, -0.10], [-0.10, 0.10]]"
       action_type: "slowdown"
       slowdown_ratio: 0.5
-      min_height: 0.08
+      min_height: 0.0
       max_height: 0.6
     scan:
       type: "scan"
       topic: "/scan"
-    camera_pointcloud:
-      type: "pointcloud"
-      topic: "/camera/points"
-      min_height: 0.08
-      max_height: 0.6
 
 docking_server:
   ros__parameters:
@@ -335,33 +252,3 @@ docking_server:
       plugin: "opennav_docking::SimpleChargingDock"
       docking_threshold: 0.1
       staging_timeout: 300.0
-
-
-unstuck_monitor:
-  ros__parameters:
-    use_sim_time: True
-    enabled: False
-    startup_grace_period: 20.0
-    command_timeout: 2.0
-    
-    # Time threshold for considering robot stuck (seconds)
-    stuck_timeout: 8.0
-    
-    # Minimum velocity to consider robot moving (m/s)
-    min_velocity_threshold: 0.01
-    
-    # Maximum radius for oscillation detection (meters)
-    oscillation_radius: 0.15
-    
-    # Maximum time allowed for recovery behaviors (seconds)
-    recovery_timeout: 30.0
-    
-    # Number of position samples to track for oscillation detection
-    position_history_size: 50
-
-    # Topics/actions used by the standalone recovery monitor
-    odom_topic: /odom
-    cmd_vel_topic: /cmd_vel
-    status_topic: /unstuck_monitor/status
-    spin_action: /spin
-    backup_action: /backup

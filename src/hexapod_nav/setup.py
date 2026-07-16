@@ -12,7 +12,8 @@ setup(
         ('share/' + package_name + '/config', ['config/octomap_params.yaml',
                                                'config/nav2_params.yaml',
                                                'config/foothold_params.yaml']),
-        ('share/' + package_name + '/launch', ['launch/full_pipeline.launch.py']),
+        ('share/' + package_name + '/launch', ['launch/full_pipeline.launch.py',
+                                               'launch/simulation.launch.py']),
     ],
     install_requires=['setuptools'],
     entry_points={

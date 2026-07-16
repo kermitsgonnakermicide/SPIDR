@@ -26,8 +26,8 @@ local_costmap:
     ros__parameters:
       # Nav2 local planner is NOT used for foot placement.
       # It controls body velocity only.
-      width: 3.0
-      height: 3.0
+      width: 3
+      height: 3
       resolution: 0.05
       rolling_window: true
 

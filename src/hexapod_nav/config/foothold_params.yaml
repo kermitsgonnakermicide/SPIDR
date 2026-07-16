@@ -2,13 +2,21 @@ terrain_cost_node:
   ros__parameters:
     w_slope: 1.0
     w_roughness: 0.8
-    w_unknown: 0.5          # Novel: unknown-ceiling penalty weight (experimental variable)
-    min_swing_height: 0.12  # Hard clearance constraint (m)
-    strict_unknown: true    # true = NaN ceiling → INF cost; false = additive penalty
+    w_unknown: 0.5
+    min_swing_height: 0.12
+    strict_unknown: true
 
 foothold_planner_node:
   ros__parameters:
-    replan_cost_threshold: 0.3   # Delta cost that triggers mid-swing replan
+    replan_cost_threshold: 0.3
     nominal_stance_height: -0.12
     aep_forward_offset: 0.05
     pep_backward_offset: 0.05
+
+gait_controller_node:
+  ros__parameters:
+    swing_duration: 0.5
+    max_swing_height: 0.06
+    step_frequency: 20.0
+    nominal_stance_height: -0.12
+    nominal_stance_forward: 0.12

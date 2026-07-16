@@ -2,103 +2,172 @@
 kinematics.py
 
 3-DOF inverse kinematics for hexapod legs.
+All dimensions match the Diddler URDF exactly.
+
+Two IK interfaces:
+  - ik_coxa(x, y, z): coxa-frame IK (matches ik_solver.py, used by gait controller)
+  - ik_leg(target_body, leg_index): body-frame IK (used by foothold planner)
+
 Leg frame: X = forward along coxa, Z = up
 Joint order: coxa (yaw), femur (pitch), tibia (pitch)
-
-EDIT THESE VALUES to match your robot:
-  coxa_len   = length of coxa link (m)
-  femur_len  = length of femur link (m)
-  tibia_len  = length of tibia link (m)
 """
 
+import math
 import numpy as np
 
+# Diddler link lengths (from URDF)
+COXA_LEN = 0.043
+FEMUR_LEN = 0.060
+TIBIA_LEN = 0.104
 
-COXA_LEN  = 0.053   # metres — CHANGE THIS
-FEMUR_LEN = 0.085   # metres — CHANGE THIS
-TIBIA_LEN = 0.110   # metres — CHANGE THIS
+# Joint limits (radians) — match URDF
+COXA_LIMITS = (-0.7, 0.7)
+FEMUR_LIMITS = (-1.5, 1.5)
+TIBIA_LIMITS = (-2.5, 0.5)
 
-# Joint limits (radians) — CHANGE TO MATCH YOUR SERVOS
-COXA_LIMITS  = (-np.pi/2, np.pi/2)
-FEMUR_LIMITS = (-np.pi/3, np.pi/2)
-TIBIA_LIMITS = (-2*np.pi/3, 0.0)
-
-# Leg mount positions relative to body centre (x, y, z) — CHANGE THIS
+# Leg mount positions relative to base_link center (x, y, z)
+# From URDF xacro leg instantiations
 LEG_ORIGINS = [
-    np.array([ 0.10,  0.08, 0.0]),   # Leg 0: front-right
-    np.array([ 0.00,  0.10, 0.0]),   # Leg 1: mid-right
-    np.array([-0.10,  0.08, 0.0]),   # Leg 2: rear-right
-    np.array([-0.10, -0.08, 0.0]),   # Leg 3: rear-left
-    np.array([ 0.00, -0.10, 0.0]),   # Leg 4: mid-left
-    np.array([ 0.10, -0.08, 0.0]),   # Leg 5: front-left
+    np.array([ 0.0835, -0.063, 0.0]),   # 0: rf (front-right)
+    np.array([ 0.0,    -0.063, 0.0]),   # 1: rm (mid-right)
+    np.array([-0.0835, -0.063, 0.0]),   # 2: rr (rear-right)
+    np.array([ 0.0835,  0.063, 0.0]),   # 3: lf (front-left)
+    np.array([ 0.0,     0.063, 0.0]),   # 4: lm (mid-left)
+    np.array([-0.0835,  0.063, 0.0]),   # 5: lr (rear-left)
 ]
 
-# Leg mount angles (rotation of coxa frame relative to body frame)
+# Leg mount yaw angles (from URDF yaw parameter)
 LEG_ANGLES = [
-    np.radians( 30),   # front-right
-    np.radians(  0),   # mid-right
-    np.radians(-30),   # rear-right
-    np.radians(-150),  # rear-left
-    np.radians(180),   # mid-left
-    np.radians( 150),  # front-left
+    -0.7853,   # rf: -45 deg
+    -1.5708,   # rm: -90 deg
+    -2.3561,   # rr: -135 deg
+     0.7853,   # lf: +45 deg
+     1.5708,   # lm: +90 deg
+     2.3561,   # lr: +135 deg
 ]
 
 
-def ik_leg(target_body: np.ndarray, leg_index: int):
+def _law_of_cosines_ik(d_xy, d_z):
     """
-    Compute joint angles for a leg to reach target_body (in body frame).
+    Core 2-DOF IK (femur + tibia) given horizontal distance and height.
+    Matches ik_solver.py convention exactly.
 
-    Returns:
-        (q_coxa, q_femur, q_tibia) in radians, or None if unreachable
+    Returns (q_femur, q_tibia) or None if unreachable.
     """
-    origin = LEG_ORIGINS[leg_index]
-    angle  = LEG_ANGLES[leg_index]
-
-    # Transform target to leg frame
-    t = target_body - origin
-    R = np.array([[np.cos(-angle), -np.sin(-angle), 0],
-                  [np.sin(-angle),  np.cos(-angle), 0],
-                  [0,               0,              1]])
-    t_leg = R @ t
-
-    # Coxa rotation: yaw to point at target in XY
-    q_coxa = np.arctan2(t_leg[1], t_leg[0])
-    if not (COXA_LIMITS[0] <= q_coxa <= COXA_LIMITS[1]):
+    L = math.sqrt(d_xy**2 + d_z**2)
+    if L > FEMUR_LEN + TIBIA_LEN or L < abs(FEMUR_LEN - TIBIA_LEN):
         return None
 
-    # Remaining distance after coxa
-    d_xy = np.sqrt(t_leg[0]**2 + t_leg[1]**2) - COXA_LEN
-    d_z  = t_leg[2]
-    dist = np.sqrt(d_xy**2 + d_z**2)
+    cos_alpha = (FEMUR_LEN**2 + L**2 - TIBIA_LEN**2) / (2 * FEMUR_LEN * L)
+    cos_alpha = max(-1.0, min(1.0, cos_alpha))
+    alpha = math.acos(cos_alpha)
 
-    # Check reachability
-    if dist > FEMUR_LEN + TIBIA_LEN or dist < abs(FEMUR_LEN - TIBIA_LEN):
-        return None
-
-    # Law of cosines
-    cos_tibia = (FEMUR_LEN**2 + TIBIA_LEN**2 - dist**2) / (2 * FEMUR_LEN * TIBIA_LEN)
-    cos_tibia = np.clip(cos_tibia, -1, 1)
-    q_tibia = np.pi - np.arccos(cos_tibia)  # negative convention
-
-    cos_femur = (FEMUR_LEN**2 + dist**2 - TIBIA_LEN**2) / (2 * FEMUR_LEN * dist)
-    cos_femur = np.clip(cos_femur, -1, 1)
-    alpha = np.arccos(cos_femur)
-    beta  = np.arctan2(-d_z, d_xy)
+    beta = math.atan2(d_z, d_xy)
     q_femur = beta + alpha
 
-    q_tibia = -q_tibia  # match servo convention
+    cos_gamma = (FEMUR_LEN**2 + TIBIA_LEN**2 - L**2) / (2 * FEMUR_LEN * TIBIA_LEN)
+    cos_gamma = max(-1.0, min(1.0, cos_gamma))
+    gamma = math.acos(cos_gamma)
+    q_tibia = gamma - math.pi
 
-    # Check joint limits
-    if not (FEMUR_LIMITS[0] <= q_femur <= FEMUR_LIMITS[1]):
-        return None
-    if not (TIBIA_LIMITS[0] <= q_tibia <= TIBIA_LIMITS[1]):
-        return None
+    return (q_femur, q_tibia)
 
+
+def ik_coxa(x, y, z):
+    """
+    IK for coxa-frame coordinates. Matches ik_solver.py exactly.
+    Used by gait controller for standing/walking.
+
+    Args:
+        x, y, z: foot position in the coxa frame (m)
+    Returns:
+        (q_coxa, q_femur, q_tibia) or (0, 0, 0) if unreachable
+    """
+    q_coxa = math.atan2(y, x)
+    if not (COXA_LIMITS[0] <= q_coxa <= COXA_LIMITS[1]):
+        return (0.0, 0.0, 0.0)
+
+    horizontal_dist = math.sqrt(x**2 + y**2) - COXA_LEN
+    result = _law_of_cosines_ik(horizontal_dist, z)
+    if result is None:
+        return (0.0, 0.0, 0.0)
+
+    q_femur, q_tibia = result
     return (q_coxa, q_femur, q_tibia)
 
 
-def get_reachable_zone(leg_index: int, body_pose: np.ndarray,
-                       grid_positions: np.ndarray) -> np.ndarray:
+def ik_leg(target_body, leg_index):
+    """
+    IK for body-frame coordinates. Used by foothold planner for reachability.
+
+    Args:
+        target_body: (x, y, z) foot position in body frame
+        leg_index: 0-5 leg index
+    Returns:
+        (q_coxa, q_femur, q_tibia) or None if unreachable
+    """
+    origin = LEG_ORIGINS[leg_index]
+    angle = LEG_ANGLES[leg_index]
+
+    # Transform to leg frame
+    t = target_body - origin
+    cos_a = math.cos(-angle)
+    sin_a = math.sin(-angle)
+    tx = t[0] * cos_a - t[1] * sin_a
+    ty = t[0] * sin_a + t[1] * cos_a
+    tz = t[2]
+
+    # Coxa yaw
+    q_coxa = math.atan2(ty, tx)
+    if not (COXA_LIMITS[0] <= q_coxa <= COXA_LIMITS[1]):
+        return None
+
+    # Femur + tibia
+    horizontal_dist = math.sqrt(tx**2 + ty**2) - COXA_LEN
+    result = _law_of_cosines_ik(horizontal_dist, tz)
+    if result is None:
+        return None
+
+    q_femur, q_tibia = result
+    return (q_coxa, q_femur, q_tibia)
+
+
+def world_to_coxa(world_pt, leg_index, body_pose):
+    """
+    Convert a world-frame point to coxa-frame coordinates for IK.
+
+    Args:
+        world_pt: (x, y, z) in world frame
+        leg_index: 0-5
+        body_pose: (x, y, z, yaw) of body in world frame
+    Returns:
+        (cx, cy, cz) in coxa frame, suitable for ik_coxa()
+    """
+    bx, by, bz, byaw = body_pose
+
+    # World → body frame
+    dx = world_pt[0] - bx
+    dy = world_pt[1] - by
+    cos_y = math.cos(-byaw)
+    sin_y = math.sin(-byaw)
+    body_x = dx * cos_y - dy * sin_y
+    body_y = dx * sin_y + dy * cos_y
+    body_z = world_pt[2]
+
+    # Body → leg frame (same transform as ik_leg)
+    origin = LEG_ORIGINS[leg_index]
+    angle = LEG_ANGLES[leg_index]
+    t = np.array([body_x - origin[0], body_y - origin[1], body_z - origin[2]])
+    cos_a = math.cos(-angle)
+    sin_a = math.sin(-angle)
+    tx = t[0] * cos_a - t[1] * sin_a
+    ty = t[0] * sin_a + t[1] * cos_a
+    tz = t[2]
+
+    return (tx, ty, tz)
+
+
+def get_reachable_zone(leg_index, body_pose, grid_positions):
     """
     Given a list of (x, y, z) world positions, return boolean mask of reachable cells.
 
@@ -106,18 +175,15 @@ def get_reachable_zone(leg_index: int, body_pose: np.ndarray,
     grid_positions: (N, 3) array of candidate foothold positions
     """
     reachable = np.zeros(len(grid_positions), dtype=bool)
-    bx, by, bz, byaw = body_pose
-
-    R_body = np.array([[np.cos(byaw), -np.sin(byaw), 0],
-                       [np.sin(byaw),  np.cos(byaw), 0],
-                       [0,             0,            1]])
 
     for i, wp in enumerate(grid_positions):
-        # World → body frame
-        t = wp - np.array([bx, by, bz])
-        t_body = R_body.T @ t
-
-        result = ik_leg(t_body, leg_index)
-        reachable[i] = result is not None
+        coxa_pt = world_to_coxa(wp, leg_index, body_pose)
+        result = _law_of_cosines_ik(
+            math.sqrt(coxa_pt[0]**2 + coxa_pt[1]**2) - COXA_LEN,
+            coxa_pt[2])
+        # Also check coxa yaw
+        q_coxa = math.atan2(coxa_pt[1], coxa_pt[0])
+        reachable[i] = (result is not None and
+                        COXA_LIMITS[0] <= q_coxa <= COXA_LIMITS[1])
 
     return reachable
