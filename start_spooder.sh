@@ -31,6 +31,22 @@ if [ -f "install/setup.bash" ]; then
     source install/setup.bash
 fi
 
+require_ros_pkg() {
+    local pkg="$1"
+    local apt_pkg="$2"
+
+    if ! ros2 pkg prefix "$pkg" >/dev/null 2>&1; then
+        log "Missing ROS package: $pkg"
+        log "Install it with: sudo apt-get install -y $apt_pkg"
+        exit 1
+    fi
+}
+
+require_ros_pkg gz_ros2_control ros-jazzy-gz-ros2-control
+require_ros_pkg controller_manager ros-jazzy-controller-manager
+require_ros_pkg position_controllers ros-jazzy-position-controllers
+require_ros_pkg joint_state_broadcaster ros-jazzy-joint-state-broadcaster
+
 
 if [ "${SPOODER_SKIP_CLEANUP:-0}" = "1" ]; then
     log "Skipping old process cleanup"
@@ -57,7 +73,7 @@ if ! ros2 pkg prefix octomap_server >/dev/null 2>&1; then
 fi
 
 log "Building Spooder packages"
-colcon build --symlink-install --packages-select spooder_description spooder_gazebo spooder_navigation spooder_control spooder_perception
+colcon build --symlink-install --packages-select spooder_description spooder_gazebo spooder_navigation spooder_control spooder_perception spooder_foothold
 source install/setup.bash
 
 

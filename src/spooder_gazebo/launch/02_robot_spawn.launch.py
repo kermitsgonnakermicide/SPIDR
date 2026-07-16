@@ -1,12 +1,26 @@
 import os
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 import launch_ros.parameter_descriptions
 
+
+def require_ros_package(package_name, apt_package):
+    try:
+        get_package_share_directory(package_name)
+    except PackageNotFoundError as exc:
+        raise RuntimeError(
+            f"Missing ROS package '{package_name}'. Install it with: "
+            f"sudo apt-get install -y {apt_package}"
+        ) from exc
+
+
 def generate_launch_description():
+    require_ros_package('gz_ros2_control', 'ros-jazzy-gz-ros2-control')
+
     pkg_spooder_description = get_package_share_directory('spooder_description')
     pkg_spooder_control = get_package_share_directory('spooder_control')
 
@@ -18,7 +32,6 @@ def generate_launch_description():
     robot_description_content = Command(['xacro ', xacro_file, ' config_file:=', config_file])
 
     # 1. Robot State Publisher (TF Tree Source)
-    # Wraps description in ParameterValue to avoid parser errors
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -31,46 +44,58 @@ def generate_launch_description():
         }]
     )
 
-
     # Spawn position parameters
-    spawn_x = LaunchConfiguration('spawn_x', default='1.0')
+    spawn_x = LaunchConfiguration('spawn_x', default='0')
     spawn_y = LaunchConfiguration('spawn_y', default='0.0')
-    spawn_z = LaunchConfiguration('spawn_z', default='25')
+    spawn_z = LaunchConfiguration('spawn_z', default='0')
     spawn_yaw = LaunchConfiguration('spawn_yaw', default='0.0')
 
-    # 2. Spawn Entity (Injects model into Gazebo)
+    # 2. Spawn Entity (Injects model into Gazebo) - delayed to let Gazebo fully load
     spawn_entity = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-topic', 'robot_description', '-name', 'spooder', 
+        arguments=['-topic', 'robot_description', '-name', 'spooder',
                    '-x', spawn_x, '-y', spawn_y, '-z', spawn_z, '-Y', spawn_yaw],
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
-
     # 3. Controllers
-    # These depend on the Gazebo plugin loading the model first. 
-    # We add a delay to be safe, but they will retry if not ready.
-    controller = Node(
+    joint_state_broadcaster = Node(
         package='controller_manager',
         executable='spawner',
-        arguments=['spooder_controller'],
+        arguments=[
+            'joint_state_broadcaster',
+            '--controller-manager', '/controller_manager',
+            '--controller-manager-timeout', '60'
+        ],
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}]
     )
-    
-    # 4. Gait Controller (The Python script)
-    # Added try-catch in script, safe to launch
+
+    controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'spooder_controller',
+            '--controller-manager', '/controller_manager',
+            '--controller-manager-timeout', '60'
+        ],
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}]
+    )
+
+    # 4. Gait Controller (skip if hexapod_nav provides its own)
+    use_hexapod_nav = LaunchConfiguration('use_hexapod_nav', default='false')
     gait_controller = Node(
         package='spooder_control',
         executable='gait_controller',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}]
+        parameters=[{'use_sim_time': use_sim_time}],
+        condition=UnlessCondition(use_hexapod_nav)
     )
 
-    # 5. EKF (Localization)
-    # Needs Odom from bridge + IMU
+    # 5. EKF
     ekf = Node(
         package='robot_localization',
         executable='ekf_node',
@@ -79,26 +104,23 @@ def generate_launch_description():
         parameters=[
             os.path.join(pkg_spooder_control, 'config', 'ekf.yaml'),
             {'use_sim_time': use_sim_time}
-        ],
-        remappings=[('odometry/filtered', 'odometry/filtered')]
+        ]
     )
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
-        DeclareLaunchArgument('spawn_x', default_value='1.0'),
+        DeclareLaunchArgument('spawn_x', default_value='0'),
         DeclareLaunchArgument('spawn_y', default_value='0.0'),
-        DeclareLaunchArgument('spawn_z', default_value='0.2'),
+        DeclareLaunchArgument('spawn_z', default_value='0'),
         DeclareLaunchArgument('spawn_yaw', default_value='0.0'),
-        
-        # Immediate TF
+        DeclareLaunchArgument('use_hexapod_nav', default_value='false'),
+
         robot_state_publisher,
-        TimerAction(period=12.0, actions=[spawn_entity]),
-        
-        # Wait for spawn -> load the position controller.
-        # joint_state_broadcaster currently segfaults inside gz_ros2_control on activation.
-        TimerAction(period=5.0, actions=[controller]),
-        
-        # Start Logic
-        TimerAction(period=12.0, actions=[ekf]),
-        TimerAction(period=15.0, actions=[gait_controller]),
+        TimerAction(period=8.0, actions=[spawn_entity]),
+
+        # Sequence
+        TimerAction(period=2.0, actions=[joint_state_broadcaster]),
+        TimerAction(period=4.0, actions=[controller]),
+        TimerAction(period=6.0, actions=[ekf]),
+        TimerAction(period=10.0, actions=[gait_controller]),
     ])
