@@ -1,0 +1,17 @@
+octomap_server:
+  ros__parameters:
+    resolution: 0.05            # 5cm voxels — good for foothold-scale terrain
+    frame_id: "map"
+    base_frame_id: "base_link"
+    height_map: false           # We want full 3D, not projected 2D
+    colored_map: false
+    sensor_model:
+      max_range: 5.0            # OAK-D reliable range
+      hit: 0.7                  # Probability update on hit
+      miss: 0.4                 # Probability update on miss
+      min: 0.12                 # Clamping threshold (log-odds)
+      max: 0.97                 # Clamping threshold (log-odds)
+    # Publish the occupied-cell point cloud continuously
+    publish_free_space: false
+    latch: false
+    filter_ground: false        # We handle floor/ceiling separation ourselves

@@ -35,7 +35,7 @@ def generate_launch_description():
     # Spawn position parameters
     spawn_x = LaunchConfiguration('spawn_x', default='1.0')
     spawn_y = LaunchConfiguration('spawn_y', default='0.0')
-    spawn_z = LaunchConfiguration('spawn_z', default='0.2')
+    spawn_z = LaunchConfiguration('spawn_z', default='25')
     spawn_yaw = LaunchConfiguration('spawn_yaw', default='0.0')
 
     # 2. Spawn Entity (Injects model into Gazebo)
@@ -92,9 +92,7 @@ def generate_launch_description():
         
         # Immediate TF
         robot_state_publisher,
-        
-        # Spawn
-        spawn_entity,
+        TimerAction(period=12.0, actions=[spawn_entity]),
         
         # Wait for spawn -> load the position controller.
         # joint_state_broadcaster currently segfaults inside gz_ros2_control on activation.
