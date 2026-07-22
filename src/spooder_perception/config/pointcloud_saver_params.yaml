@@ -56,7 +56,7 @@ terrain_analyzer:
 
 octomap_terrain_adapter:
   ros__parameters:
-    input_topic: "/octomap_server/octomap_point_cloud_centers"
+    input_topic: "/octomap_point_cloud_centers"
     traversability_topic: "/terrain/traversability"
     terrain_height_topic: "/perception/terrain_height"
     debug_topic: "/perception/debug_terrain_pc"

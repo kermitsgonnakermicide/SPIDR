@@ -14,7 +14,7 @@ import numpy as np
 from geometry_msgs.msg import Twist, PointStamped
 from nav_msgs.msg import Odometry
 from grid_map_msgs.msg import GridMap
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, UInt8MultiArray
 
 from . import kinematics as kin
 
@@ -94,6 +94,10 @@ class GaitControllerNode(Node):
         self.joint_pub = self.create_publisher(
             Float64MultiArray, '/spooder_controller/commands', 10)
 
+        # Publisher — leg phase (0=STANCE, 1=SWING) for foothold planner
+        self.phase_pub = self.create_publisher(
+            UInt8MultiArray, '/leg_phase', 10)
+
         self.create_timer(1.0 / self.freq, self.control_loop)
         self.get_logger().info('Gait controller node started')
 
@@ -124,6 +128,28 @@ class GaitControllerNode(Node):
         self.swing_targets[leg] = np.array(coxa_pt)
         self.get_logger().info(f'Leg {leg}: mid-swing replan')
 
+    def _get_ceiling_clearance(self, world_pos):
+        """Look up ceiling clearance at a world XY position from terrain grid."""
+        if self.terrain_grid is None:
+            return self.max_height
+        try:
+            idx = self.terrain_grid.layers.index('clearance')
+        except ValueError:
+            return self.max_height
+        data = self.terrain_grid.data[idx]
+        n = data.layout.dim[0].size
+        res = self.terrain_grid.info.resolution
+        cx = self.terrain_grid.info.pose.position.x
+        cy = self.terrain_grid.info.pose.position.y
+        ix = int((world_pos[0] - (cx - self.terrain_grid.info.length_x / 2)) / res)
+        iy = int((world_pos[1] - (cy - self.terrain_grid.info.length_y / 2)) / res)
+        if 0 <= ix < n and 0 <= iy < n:
+            flat = np.array(data.data, dtype=np.float32)
+            val = flat[ix * n + iy]
+            if np.isfinite(val) and val > 0:
+                return float(val)
+        return self.max_height
+
     def _solve_and_publish(self):
         msg = Float64MultiArray()
         joint_positions = []
@@ -140,6 +166,16 @@ class GaitControllerNode(Node):
         msg.data = joint_positions
         self.joint_pub.publish(msg)
 
+    def _publish_leg_phase(self):
+        """Publish current leg phase (0=STANCE, 1=SWING) for foothold planner."""
+        msg = UInt8MultiArray()
+        swinging = TRIPOD_A if self.active_tripod == 0 else TRIPOD_B
+        phase = [0] * NUM_LEGS
+        for leg in swinging:
+            phase[leg] = 1
+        msg.data = phase
+        self.phase_pub.publish(msg)
+
     def control_loop(self):
         dt = 1.0 / self.freq
 
@@ -151,6 +187,7 @@ class GaitControllerNode(Node):
         # Standing: no velocity → hold position
         if abs(self.cmd_vel[0]) < 0.001 and abs(self.cmd_vel[1]) < 0.001:
             self._solve_and_publish()
+            self._publish_leg_phase()
             return
 
         swinging = TRIPOD_A if self.active_tripod == 0 else TRIPOD_B
@@ -176,16 +213,18 @@ class GaitControllerNode(Node):
             t = self.swing_progress[leg]
             target = self.swing_targets[leg]
             if target is None:
-                # Default: step forward in coxa frame
+                # Default: step forward + lateral in coxa frame
                 target = self.foot_positions[leg].copy()
                 target[0] += self.cmd_vel[0] * self.swing_dur
-            arc_h = min(self.max_height, 0.06)
+                target[1] += self.cmd_vel[1] * self.swing_dur
+            arc_h = min(self.max_height, self._get_ceiling_clearance(target) * 0.6)
             self.foot_positions[leg] = bezier_arc(
                 self.foot_positions[leg], target, arc_h, t)
 
-        # Stance: push feet backward (body moves forward)
+        # Stance: push feet backward (body moves forward + lateral)
         for leg in stance:
             self.foot_positions[leg][0] -= self.cmd_vel[0] * dt
+            self.foot_positions[leg][1] -= self.cmd_vel[1] * dt
 
         self._solve_and_publish()
 

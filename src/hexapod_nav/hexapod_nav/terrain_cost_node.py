@@ -3,14 +3,15 @@
 terrain_cost_node.py
 
 Computes foothold cost per grid cell from terrain properties:
-  - Slope cost       (gradient of floor height)
-  - Roughness cost   (local variance of floor height)
-  - Clearance cost   (ceiling - floor; hard-zero below swing threshold)
-  - Unknown penalty  (NaN ceiling = uncertain overhead = cost penalty)
+  - Slope cost        (gradient of floor height)
+  - Roughness cost    (local variance of floor height)
+  - Clearance cost    (ceiling - floor; hard-zero below swing threshold)
+  - Unknown penalty   (unknown_above layer: continuous fraction 0..1)
 
 Cost formula:
-  cost(x,y) = w_s * slope(x,y) + w_r * roughness(x,y) + w_u * unknown(x,y)
-  subject to: cost = INF if clearance(x,y) < min_swing_height OR clearance(x,y) is NaN and use_strict_unknown=True
+  cost(x,y) = w_s * slope(x,y) + w_r * roughness(x,y) + w_u * unknown_above(x,y)
+  subject to: cost = INF if clearance(x,y) < min_swing_height
+              or (strict_unknown=True AND unknown_above(x,y) > 0)
 """
 
 import rclpy
@@ -46,6 +47,7 @@ class TerrainCostNode(Node):
         floor = layers.get('floor')
         ceiling = layers.get('ceiling')
         clearance = layers.get('clearance')
+        unknown_above = layers.get('unknown_above')
 
         if floor is None:
             return
@@ -54,30 +56,30 @@ class TerrainCostNode(Node):
         cost = np.zeros_like(floor)
 
         # --- Slope cost ---
-        # Gradient magnitude of floor height
         gx, gy = np.gradient(np.nan_to_num(floor, nan=0.0), self.get_res(msg))
         slope = np.sqrt(gx**2 + gy**2)
         slope_norm = slope / (slope.max() + 1e-6)
         cost += self.w_s * slope_norm
 
         # --- Roughness cost ---
-        # Local variance using 3x3 kernel
         roughness = self._local_variance(floor, kernel=3)
         rough_norm = roughness / (roughness.max() + 1e-6)
         cost += self.w_r * rough_norm
 
         # --- Clearance constraint ---
         if clearance is not None:
-            # Hard constraint: if clearance < min_swing, cost = INF
             too_low = clearance < self.min_swing
             cost[too_low] = np.inf
 
-            # Unknown ceiling penalty
-            unknown_mask = np.isnan(ceiling) if ceiling is not None else np.zeros_like(floor, dtype=bool)
+        # --- Unknown overhead penalty (continuous 0..1 fraction) ---
+        if unknown_above is not None:
             if self.strict_unknown:
-                cost[unknown_mask] = np.inf
+                # Any unknown overhead → INF cost
+                has_unknown = unknown_above > 0.0
+                cost[has_unknown] = np.inf
             else:
-                cost[unknown_mask] += self.w_u
+                # Continuous penalty proportional to unknown fraction
+                cost += self.w_u * unknown_above
 
         # NaN floor = no terrain data = infinite cost
         cost[np.isnan(floor)] = np.inf
@@ -85,15 +87,16 @@ class TerrainCostNode(Node):
         self._publish_cost(cost, msg)
 
     def _local_variance(self, grid, kernel=3):
-        """Compute local variance around each cell."""
-        padded = np.pad(np.nan_to_num(grid, nan=0.0), kernel//2, mode='edge')
-        result = np.zeros_like(grid)
+        """Compute local variance around each cell (vectorized)."""
+        filled = np.nan_to_num(grid, nan=0.0)
         half = kernel // 2
-        for i in range(grid.shape[0]):
-            for j in range(grid.shape[1]):
-                patch = padded[i:i+kernel, j:j+kernel]
-                result[i, j] = np.var(patch)
-        return result
+        padded = np.pad(filled, half, mode='edge')
+        h, w = grid.shape
+        # Use stride_tricks for sliding window view (no copy on numpy >=1.20)
+        from numpy.lib.stride_tricks import sliding_window_view
+        windows = sliding_window_view(padded, (kernel, kernel))
+        # windows shape: (h, w, kernel, kernel)
+        return windows.reshape(h, w, -1).var(axis=2)
 
     def _extract_layer(self, msg: GridMap, index: int) -> np.ndarray:
         data = msg.data[index]

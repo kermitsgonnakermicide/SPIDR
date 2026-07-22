@@ -21,7 +21,7 @@ class OctomapTerrainAdapter(Node):
     def __init__(self):
         super().__init__('octomap_terrain_adapter')
 
-        self.declare_parameter('input_topic', '/octomap_server/octomap_point_cloud_centers')
+        self.declare_parameter('input_topic', '/octomap_point_cloud_centers')
         self.declare_parameter('traversability_topic', '/terrain/traversability')
         self.declare_parameter('terrain_height_topic', '/perception/terrain_height')
         self.declare_parameter('debug_topic', '/perception/debug_terrain_pc')

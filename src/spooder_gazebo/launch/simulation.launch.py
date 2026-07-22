@@ -35,6 +35,7 @@ def generate_launch_description():
     # Launch configurations
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     world_name = LaunchConfiguration('world', default='test_world')
+    spawn_z = LaunchConfiguration('spawn_z', default='2.5')
 
     # World file path
     world_file = PathJoinSubstitution([pkg_spooder_gazebo, 'worlds', [world_name, '.sdf']])
@@ -88,7 +89,7 @@ def generate_launch_description():
         arguments=[
             '-topic', 'robot_description',
             '-name', 'spooder',
-            '-x', '0.0', '-y', '0.0', '-z', '0.5'
+            '-x', '0.0', '-y', '0.0', '-z', spawn_z
         ],
         output='screen'
     )
@@ -164,6 +165,7 @@ def generate_launch_description():
         # Arguments
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('world', default_value='test_world'),
+        DeclareLaunchArgument('spawn_z', default_value='2.5'),
         
         # Phase 1: Robot Description & TF (Immediate)
         robot_state_publisher,

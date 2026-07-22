@@ -47,7 +47,7 @@ def generate_launch_description():
     # Spawn position parameters
     spawn_x = LaunchConfiguration('spawn_x', default='0')
     spawn_y = LaunchConfiguration('spawn_y', default='0.0')
-    spawn_z = LaunchConfiguration('spawn_z', default='0')
+    spawn_z = LaunchConfiguration('spawn_z', default='2.5')
     spawn_yaw = LaunchConfiguration('spawn_yaw', default='0.0')
 
     # 2. Spawn Entity (Injects model into Gazebo) - delayed to let Gazebo fully load
@@ -111,7 +111,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('spawn_x', default_value='0'),
         DeclareLaunchArgument('spawn_y', default_value='0.0'),
-        DeclareLaunchArgument('spawn_z', default_value='0'),
+        DeclareLaunchArgument('spawn_z', default_value='2.5'),
         DeclareLaunchArgument('spawn_yaw', default_value='0.0'),
         DeclareLaunchArgument('use_hexapod_nav', default_value='false'),
 

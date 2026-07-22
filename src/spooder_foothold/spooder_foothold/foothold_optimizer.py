@@ -69,7 +69,7 @@ class FootholdOptimizer(Node):
 
         self.octomap_sub = self.create_subscription(
             PointCloud2,
-            '/octomap_server/octomap_point_cloud_centers',
+            '/octomap_point_cloud_centers',
             self.octomap_callback, 10
         )
 

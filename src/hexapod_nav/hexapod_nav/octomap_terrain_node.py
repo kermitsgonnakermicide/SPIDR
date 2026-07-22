@@ -19,9 +19,7 @@ from sensor_msgs.msg import PointCloud2
 from grid_map_msgs.msg import GridMap
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 import sensor_msgs_py.point_cloud2 as pc2
-from nav_msgs.msg import OccupancyGrid
-from octomap_msgs.msg import Octomap
-import struct
+from tf2_ros import Buffer, TransformListener
 
 
 class OctomapTerrainNode(Node):
@@ -34,15 +32,23 @@ class OctomapTerrainNode(Node):
         self.declare_parameter('robot_body_height', 0.15)  # Robot body clearance above ground (m)
         self.declare_parameter('floor_search_height', 0.3) # Max height considered "floor" above lowest point
         self.declare_parameter('voxel_size', 0.05)         # Must match octomap resolution
+        self.declare_parameter('base_frame', 'spooder/base_footprint')
+        self.declare_parameter('world_frame', 'map')
 
         self.res = self.get_parameter('resolution').value
         self.radius = self.get_parameter('grid_radius').value
         self.body_h = self.get_parameter('robot_body_height').value
         self.floor_search = self.get_parameter('floor_search_height').value
         self.voxel_size = self.get_parameter('voxel_size').value
+        self.base_frame = self.get_parameter('base_frame').value
+        self.world_frame = self.get_parameter('world_frame').value
 
         self.grid_size = int(2 * self.radius / self.res)
-        self.robot_pos = np.array([0.0, 0.0, 0.0])  # Updated from TF
+        self.robot_pos = np.array([0.0, 0.0, 0.0])
+
+        # TF2 for robot position
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Subscriptions
         self.create_subscription(
@@ -57,8 +63,23 @@ class OctomapTerrainNode(Node):
 
         self.get_logger().info('OctoMap terrain node started')
 
+    def _update_robot_position(self):
+        """Look up robot position from TF."""
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                self.world_frame, self.base_frame, rclpy.time.Time())
+            self.robot_pos = np.array([
+                tf.transform.translation.x,
+                tf.transform.translation.y,
+                tf.transform.translation.z,
+            ])
+        except Exception:
+            pass  # keep last known position
+
     def pointcloud_callback(self, msg: PointCloud2):
-        """Process occupied voxels into floor/ceiling grid."""
+        """Process occupied voxels into floor/ceiling grid + unknown_above fraction."""
+        self._update_robot_position()
+
         points = list(pc2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True))
         if not points:
             return
@@ -69,8 +90,10 @@ class OctomapTerrainNode(Node):
         cx, cy = self.robot_pos[0], self.robot_pos[1]
         n = self.grid_size
 
-        floor_grid    = np.full((n, n), np.nan)
-        ceiling_grid  = np.full((n, n), np.nan)
+        floor_grid     = np.full((n, n), np.nan)
+        ceiling_grid   = np.full((n, n), np.nan)
+        unknown_grid   = np.full((n, n), 1.0)  # default: fully unknown
+        total_cells    = n * n
 
         # Bin points into grid cells
         cell_points = {}  # (ix, iy) -> list of z values
@@ -82,6 +105,8 @@ class OctomapTerrainNode(Node):
                 if key not in cell_points:
                     cell_points[key] = []
                 cell_points[key].append(z)
+
+        column_voxels = int((self.body_h + 0.1) / self.voxel_size)  # expected voxels in column above floor
 
         for (ix, iy), zvals in cell_points.items():
             zvals = sorted(zvals)
@@ -97,15 +122,22 @@ class OctomapTerrainNode(Node):
             overhead_pts = [z for z in zvals if z > overhead_threshold]
             if overhead_pts:
                 ceiling_grid[ix, iy] = min(overhead_pts)
-            # If no overhead points observed: ceiling is NaN (unknown — treated as potentially low)
+
+            # Unknown_above: continuous fraction [0, 1]
+            # Count occupied voxels in the column above floor (up to body_h + 0.1m)
+            col_top = floor_h + self.body_h + 0.1
+            col_bot = floor_h + self.body_h + 0.05  # above robot body
+            overhead_count = sum(1 for z in zvals if col_bot < z <= col_top)
+            unknown_grid[ix, iy] = max(0.0, 1.0 - overhead_count / max(column_voxels, 1))
 
         # Clearance: ceiling - floor (NaN where ceiling unknown)
         clearance_grid = ceiling_grid - floor_grid
 
         # Publish as GridMap
-        self._publish_grid_map(floor_grid, ceiling_grid, clearance_grid, msg.header)
+        self._publish_grid_map(floor_grid, ceiling_grid, clearance_grid,
+                               unknown_grid, msg.header)
 
-    def _publish_grid_map(self, floor, ceiling, clearance, header):
+    def _publish_grid_map(self, floor, ceiling, clearance, unknown_above, header):
         gm = GridMap()
         gm.header = header
         gm.info.resolution = self.res
@@ -115,9 +147,10 @@ class OctomapTerrainNode(Node):
         gm.info.pose.position.y = self.robot_pos[1]
         gm.info.pose.orientation.w = 1.0
 
-        gm.layers = ['floor', 'ceiling', 'clearance']
+        gm.layers = ['floor', 'ceiling', 'clearance', 'unknown_above']
 
-        for name, data in [('floor', floor), ('ceiling', ceiling), ('clearance', clearance)]:
+        for name, data in [('floor', floor), ('ceiling', ceiling),
+                           ('clearance', clearance), ('unknown_above', unknown_above)]:
             layer = Float32MultiArray()
             dim_x = MultiArrayDimension(label='column', size=self.grid_size, stride=self.grid_size * self.grid_size)
             dim_y = MultiArrayDimension(label='row', size=self.grid_size, stride=self.grid_size)

@@ -4,33 +4,34 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Status1
-        - /OctoMap2
-        - /Grid Map (floor)3
-        - /Grid Map (ceiling)4
-        - /Grid Map (clearance)5
-        - /Grid Map (cost)6
         - /RobotModel1
         - /TF1
-        - /PointCloud2 (Camera)7
-        - /PointCloud2 (OctoMap)8
+        - /Camera PointCloud1
+        - /OctoMap PointCloud1
+        - /OctoMap Occupied Cells1
+        - /OctoMap Projected Map1
+        - /Global Costmap1
+        - /Local Costmap1
+        - /Nav2 Plan1
       Splitter Ratio: 0.5
   - Class: rviz_common/Views
     Name: Views
     Property Tree Widget:
       Expanded:
-        - /Orbit1
+        - /Current View1
     Splitter Ratio: 0.3
 Visualization Manager:
   Class: ""
   Displays:
-    - Class: rviz_default_plugins/Grid
-      Name: Grid
+    - Alpha: 0.5
       Cell Size: 1
+      Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
+      Enabled: true
       Line Style:
         Line Width: 0.03
         Value: Lines
+      Name: Grid
       Normal Cell Count: 0
       Offset:
         X: 0
@@ -40,156 +41,385 @@ Visualization Manager:
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
       Value: true
-    - Class: rviz_default_plugins/PointCloud2
-      Name: PointCloud2 (Camera)
-      Color: 255; 255; 255
-      Color Transformer: ""
-      Enabled: true
-      Position Transformer: ""
-      Queue Size: 10
-      Style: Points
-      Topic:
-        Depth Size: 1
-        Value: /camera/depth/color/points
-      Use rainbow: true
-    - Class: rviz_default_plugins/PointCloud2
-      Name: PointCloud2 (OctoMap)
-      Color: 255; 0; 0
-      Color Transformer: ""
-      Enabled: true
-      Position Transformer: ""
-      Queue Size: 10
-      Style: Points
-      Topic:
-        Depth Size: 1
-        Value: /octomap_point_cloud_centers
-      Use rainbow: false
-    - Class: octomap_rviz_plugins/OctoMap
-      Name: OctoMap2
-      Color Mode: Z-Axis
-      Enabled: true
-      Max Color: 255; 255; 0
-      Min Color: 0; 0; 255
-      Topic:
-        Depth Size: 1
-        Value: /octomap_full
-    - Class: grid_map_rviz_plugin/GridMap
-      Name: Grid Map (floor)
-      Enabled: true
-      Layer: floor
-      Topic:
-        Depth Size: 1
-        Value: /terrain_grid_map
-      Color Scheme: viridis
-      Min Color: 0; 0; 255
-      Max Color: 255; 0; 0
-    - Class: grid_map_rviz_plugin/GridMap
-      Name: Grid Map (ceiling)
-      Enabled: true
-      Layer: ceiling
-      Topic:
-        Depth Size: 1
-        Value: /terrain_grid_map
-      Color Scheme: viridis
-      Min Color: 0; 0; 255
-      Max Color: 255; 0; 0
-    - Class: grid_map_rviz_plugin/GridMap
-      Name: Grid Map (clearance)
-      Enabled: true
-      Layer: clearance
-      Topic:
-        Depth Size: 1
-        Value: /terrain_grid_map
-      Color Scheme: viridis
-      Min Color: 0; 255; 0
-      Max Color: 255; 0; 0
-    - Class: grid_map_rviz_plugin/GridMap
-      Name: Grid Map (cost)
-      Enabled: true
-      Layer: cost
-      Topic:
-        Depth Size: 1
-        Value: /terrain_costmap
-      Color Scheme: viridis
-      Min Color: 0; 255; 0
-      Max Color: 255; 0; 0
-    - Class: rviz_default_plugins/RobotModel
-      Name: RobotModel1
-      Enabled: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
       Description Topic:
-        Depth Size: 1
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
         Value: /robot_description
-    - Class: rviz_default_plugins/TF
-      Name: TF1
       Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: ""
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: RobotModel
+      TF Prefix: spooder
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Filter (blacklist): ""
+      Filter (whitelist): ""
       Frame Timeout: 15
+      Frames:
+        All Enabled: true
+      Marker Scale: 0.5
+      Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
-      Tree:
-        map:
-          odom:
-            base_link:
-              leg0_coxa:
-                leg0_femur:
-                  leg0_tibia:
-                    leg0_tip: {}
-              leg1_coxa:
-                leg1_femur:
-                  leg1_tibia:
-                    leg1_tip: {}
-              leg2_coxa:
-                leg2_femur:
-                  leg2_tibia:
-                    leg2_tip: {}
-              leg3_coxa:
-                leg3_femur:
-                  leg3_tibia:
-                    leg3_tip: {}
-              leg4_coxa:
-                leg4_femur:
-                  leg4_tibia:
-                    leg4_tip: {}
-              leg5_coxa:
-                leg5_femur:
-                  leg5_tibia:
-                    leg5_tip: {}
+      Update Interval: 0
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/LaserScan
+      Color: 255; 0; 0
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: LaserScan
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.02
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /scan
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: rgb
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Camera PointCloud
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.03
+      Style: Boxes
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 80; 80
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: OctoMap PointCloud
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05
+      Style: Boxes
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /octomap_point_cloud_centers
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: OctoMap Occupied Cells
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /occupied_cells_vis_array
+      Value: true
+    - Alpha: 0.5
+      Binary representation: false
+      Binary threshold: 100
+      Class: rviz_default_plugins/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: SLAM Map
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map_updates
+      Use Timestamp: false
+      Value: true
+    - Alpha: 0.5
+      Binary representation: false
+      Binary threshold: 100
+      Class: rviz_default_plugins/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: OctoMap Projected Map
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /projected_map
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /projected_map_updates
+      Use Timestamp: false
+      Value: true
+    - Alpha: 0.7
+      Binary representation: false
+      Binary threshold: 100
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Draw Behind: false
+      Enabled: true
+      Name: Global Costmap
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /global_costmap/costmap
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /global_costmap/costmap_updates
+      Use Timestamp: false
+      Value: true
+    - Alpha: 0.8
+      Binary representation: false
+      Binary threshold: 100
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Draw Behind: false
+      Enabled: true
+      Name: Local Costmap
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_costmap/costmap
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_costmap/costmap_updates
+      Use Timestamp: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 200; 255
+      Enabled: true
+      Head Diameter: 0.3
+      Head Length: 0.2
+      Length: 0.3
+      Line Style: Lines
+      Line Width: 0.04
+      Name: Nav2 Plan
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.03
+      Shaft Diameter: 0.1
+      Shaft Length: 0.1
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /plan
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/Polygon
+      Color: 255; 0; 0
+      Enabled: true
+      Name: Local Footprint
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_costmap/published_footprint
+      Value: true
+    - Class: grid_map_rviz_plugin/GridMap
+      Color Scheme: viridis
+      Enabled: true
+      Layer: floor
+      Max Color: 255; 0; 0
+      Min Color: 0; 0; 255
+      Name: Terrain Floor
+      Topic:
+        Depth: 1
+        Value: /terrain_grid_map
+    - Class: grid_map_rviz_plugin/GridMap
+      Color Scheme: viridis
+      Enabled: true
+      Layer: clearance
+      Max Color: 255; 0; 0
+      Min Color: 0; 255; 0
+      Name: Terrain Clearance
+      Topic:
+        Depth: 1
+        Value: /terrain_grid_map
+    - Class: grid_map_rviz_plugin/GridMap
+      Color Scheme: viridis
+      Enabled: true
+      Layer: cost
+      Max Color: 255; 0; 0
+      Min Color: 0; 255; 0
+      Name: Terrain Cost
+      Topic:
+        Depth: 1
+        Value: /terrain_costmap
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
     Fixed Frame: map
     Frame Rate: 30
-    Toolbar Buttons: true
-  Name: Root
+  Name: root
   Tools:
     - Class: rviz_default_plugins/Interact
     - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Select
     - Class: rviz_default_plugins/FocusCamera
     - Class: rviz_default_plugins/Measure
-    - Class: rviz_default_plugins/InitialPose
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /initialpose
     - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_pose
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
   Value: true
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 5
-      Enabled: true
+      Distance: 4
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
       Focal Point:
         X: 0
         Y: 0
         Z: 0
       Focal Shape Fixed Size: true
-      Focal Shape Size: 0.1
-      Name: Orbit
+      Focal Shape Size: 0.05
+      Invert Z Axis: false
+      Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.7
+      Pitch: 0.8
       Target Frame: <Fixed Frame>
-      Value: Orbit (rviz_default_plugins/Orbit)
-      Yaw: 0.7
+      Value: Orbit (rviz)
+      Yaw: 0.8
 Window Geometry:
+  Displays:
+    collapsed: false
   Height: 1080
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Views:
+    collapsed: false
   Width: 1920
   X: 0
   Y: 0

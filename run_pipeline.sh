@@ -29,7 +29,7 @@ if [ "$MODE" = "sim" ]; then
     echo "  5. hexapod_nav pipeline (OctoMap → Terrain → Cost → Foothold → Gait)"
     echo "  6. RViz (hexapod_nav sim.rviz)"
     echo "--------------------------------------------"
-    ros2 launch hexapod_nav simulation.launch.py world:=$WORLD
+    ros2 launch hexapod_nav full_simulation.launch.py world:=$WORLD
 else
     echo "Starting real robot pipeline..."
     echo "--------------------------------------------"

@@ -19,6 +19,7 @@ from geometry_msgs.msg import PointStamped
 from grid_map_msgs.msg import GridMap
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
+from std_msgs.msg import UInt8MultiArray
 
 from . import kinematics as kin
 
@@ -50,6 +51,7 @@ class FootholdPlannerNode(Node):
         self.committed_targets = [None] * NUM_LEGS   # (ix, iy, cost_at_commit)
         self.costmap = None
         self.costmap_meta = None
+        self.terrain_grid = None
         self.body_pose = np.array([0.0, 0.0, 0.12, 0.0])  # x, y, z, yaw
 
         # Publishers — one per leg
@@ -64,15 +66,33 @@ class FootholdPlannerNode(Node):
 
         # Subscriptions
         self.create_subscription(GridMap, '/terrain_costmap', self.costmap_callback, 10)
+        self.create_subscription(GridMap, '/terrain_grid_map', self.terrain_callback, 10)
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.create_subscription(UInt8MultiArray, '/leg_phase', self.phase_callback, 10)
 
         self.get_logger().info('Foothold planner node started')
+
+    def terrain_callback(self, msg: GridMap):
+        """Cache terrain grid map for floor height lookups."""
+        self.terrain_grid = msg
 
     def odom_callback(self, msg: Odometry):
         p = msg.pose.pose.position
         q = msg.pose.pose.orientation
         yaw = 2 * np.arctan2(q.z, q.w)
         self.body_pose = np.array([p.x, p.y, p.z, yaw])
+
+    def phase_callback(self, msg: UInt8MultiArray):
+        """Receive leg phase from gait controller. Detect transitions."""
+        if len(msg.data) != NUM_LEGS:
+            return
+        for leg_idx in range(NUM_LEGS):
+            new_phase = msg.data[leg_idx]
+            old_phase = self.leg_phase[leg_idx]
+            if old_phase == STANCE and new_phase == SWING:
+                self.begin_swing(leg_idx)
+            elif old_phase == SWING and new_phase == STANCE:
+                self.end_swing(leg_idx)
 
     def costmap_callback(self, msg: GridMap):
         """Runs every time terrain costmap updates."""
@@ -115,16 +135,23 @@ class FootholdPlannerNode(Node):
         xs = cx - meta.length_x/2 + (np.arange(n) + 0.5) * res
         ys = cy - meta.length_y/2 + (np.arange(n) + 0.5) * res
         xx, yy = np.meshgrid(xs, ys, indexing='ij')
-        zz = np.zeros_like(xx)  # floor heights — ideally read from terrain grid_map
+
+        # Read floor heights from terrain grid_map if available
+        zz = np.full_like(xx, self.stance_z)
+        if self.terrain_grid is not None:
+            floor_data = self._extract_terrain_layer(self.terrain_grid, 'floor')
+            if floor_data is not None and floor_data.shape == xx.shape:
+                zz = np.nan_to_num(floor_data, nan=self.stance_z)
 
         candidates = np.stack([xx.flatten(), yy.flatten(), zz.flatten()], axis=1)
 
         # Mask to reachable cells
         reachable = kin.get_reachable_zone(leg_idx, self.body_pose, candidates)
 
-        # AEP/PEP workspace further restricts candidates
-        # (foothold must be ahead of PEP and behind AEP in leg frame)
-        # — implement per your gait geometry
+        # AEP/PEP workspace restriction: transform each candidate to coxa frame
+        # and reject if forward distance is outside [PEP, AEP] range
+        aep_mask = self._aep_pep_filter(candidates, leg_idx)
+        reachable &= aep_mask
 
         cost_flat = self.costmap.flatten()
         cost_flat[~reachable] = np.inf
@@ -151,6 +178,48 @@ class FootholdPlannerNode(Node):
         pub = self.replan_pubs[leg_idx] if replan else self.target_pubs[leg_idx]
         pub.publish(pt)
 
+    def _aep_pep_filter(self, candidates: np.ndarray, leg_idx: int) -> np.ndarray:
+        """
+        Filter candidates by AEP/PEP workspace bounds in the leg's coxa frame.
+
+        AEP (Anterior Extreme Position): forward limit of step workspace
+        PEP (Posterior Extreme Position): backward limit of step workspace
+        Candidates must have their coxa-frame x-coordinate between PEP and AEP.
+        """
+        mask = np.ones(len(candidates), dtype=bool)
+        bx, by, bz, byaw = self.body_pose
+
+        cos_y = np.cos(-byaw)
+        sin_y = np.sin(-byaw)
+        origin = kin.LEG_ORIGINS[leg_idx]
+        angle = kin.LEG_ANGLES[leg_idx]
+        cos_a = np.cos(-angle)
+        sin_a = np.sin(-angle)
+
+        for i, wp in enumerate(candidates):
+            # World → body frame
+            dx = wp[0] - bx
+            dy = wp[1] - by
+            body_x = dx * cos_y - dy * sin_y
+            body_y = dx * sin_y + dy * cos_y
+            body_z = wp[2]
+
+            # Body → leg frame
+            tx = body_x - origin[0]
+            ty = body_y - origin[1]
+            tz = body_z - origin[2]
+            coxa_x = tx * cos_a - ty * sin_a
+
+            # coxa_x is forward distance in leg frame
+            # PEP: minimum forward distance, AEP: maximum forward distance
+            pep_limit = kin.COXA_LEN + self.pep_offset
+            aep_limit = kin.COXA_LEN + kin.FEMUR_LEN + kin.TIBIA_LEN - self.aep_offset
+
+            if coxa_x < pep_limit or coxa_x > aep_limit:
+                mask[i] = False
+
+        return mask
+
     def _get_cost_at_cell(self, ix: int, iy: int) -> float:
         if self.costmap is None:
             return np.inf
@@ -161,6 +230,16 @@ class FootholdPlannerNode(Node):
 
     def _extract_cost_array(self, msg: GridMap) -> np.ndarray:
         data = msg.data[0]
+        n = data.layout.dim[0].size
+        return np.array(data.data, dtype=np.float32).reshape((n, n), order='F')
+
+    def _extract_terrain_layer(self, msg: GridMap, layer_name: str) -> np.ndarray:
+        """Extract a named layer from a GridMap message."""
+        try:
+            idx = msg.layers.index(layer_name)
+        except ValueError:
+            return None
+        data = msg.data[idx]
         n = data.layout.dim[0].size
         return np.array(data.data, dtype=np.float32).reshape((n, n), order='F')
 

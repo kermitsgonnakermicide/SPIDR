@@ -12,5 +12,15 @@ octomap_server:
       min: 0.12
       max: 0.97
     publish_free_space: false
-    latch: false
-    filter_ground: false
+    latch: true
+    filter_ground: true
+    ground_detection:
+      max_distance: 0.15
+      min_distance: 0.0
+    # Publish 2D projected OccupancyGrid on /projected_map for Nav2 static_layer + RViz
+    publish_2d_map: true
+    # Height filters: wide range for fully-3D worlds with overhangs
+    point_cloud_min_z: -0.5
+    point_cloud_max_z: 2.0
+    occupancy_min_z: -0.3
+    occupancy_max_z: 2.0
