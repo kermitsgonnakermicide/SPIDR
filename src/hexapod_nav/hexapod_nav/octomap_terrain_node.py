@@ -17,7 +17,8 @@ from rclpy.node import Node
 import numpy as np
 from sensor_msgs.msg import PointCloud2
 from grid_map_msgs.msg import GridMap
-from std_msgs.msg import Float32MultiArray, MultiArrayDimension
+
+from .grid_map_utils import make_layer
 import sensor_msgs_py.point_cloud2 as pc2
 from tf2_ros import Buffer, TransformListener
 
@@ -151,14 +152,8 @@ class OctomapTerrainNode(Node):
 
         for name, data in [('floor', floor), ('ceiling', ceiling),
                            ('clearance', clearance), ('unknown_above', unknown_above)]:
-            layer = Float32MultiArray()
-            dim_x = MultiArrayDimension(label='column', size=self.grid_size, stride=self.grid_size * self.grid_size)
-            dim_y = MultiArrayDimension(label='row', size=self.grid_size, stride=self.grid_size)
-            layer.layout.dim = [dim_x, dim_y]
-            flat = data.flatten(order='F')  # grid_map uses column-major
-            flat_clean = np.where(np.isnan(flat), float('nan'), flat).astype(np.float32)
-            layer.data = flat_clean.tolist()
-            gm.data.append(layer)
+            flat_clean = np.where(np.isnan(data), float('nan'), data).astype(np.float32)
+            gm.data.append(make_layer(flat_clean))
 
         self.terrain_pub.publish(gm)
 

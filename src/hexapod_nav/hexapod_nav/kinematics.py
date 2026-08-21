@@ -167,6 +167,29 @@ def world_to_coxa(world_pt, leg_index, body_pose):
     return (tx, ty, tz)
 
 
+def coxa_to_world(coxa_pt, leg_index, body_pose):
+    """Inverse of world_to_coxa: coxa-frame point → world frame."""
+    bx, by, bz, byaw = body_pose
+    origin = LEG_ORIGINS[leg_index]
+    angle = LEG_ANGLES[leg_index]
+
+    # Coxa → body (rotate by +leg angle, then add origin)
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
+    cx, cy, cz = float(coxa_pt[0]), float(coxa_pt[1]), float(coxa_pt[2])
+    body_x = cx * cos_a - cy * sin_a + origin[0]
+    body_y = cx * sin_a + cy * cos_a + origin[1]
+    body_z = cz + origin[2]
+
+    # Body → world
+    cos_y = math.cos(byaw)
+    sin_y = math.sin(byaw)
+    wx = body_x * cos_y - body_y * sin_y + bx
+    wy = body_x * sin_y + body_y * cos_y + by
+    wz = body_z + bz
+    return np.array([wx, wy, wz])
+
+
 def get_reachable_zone(leg_index, body_pose, grid_positions):
     """
     Given a list of (x, y, z) world positions, return boolean mask of reachable cells.

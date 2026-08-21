@@ -42,7 +42,7 @@ def generate_launch_description():
     headless     = LaunchConfiguration('headless',     default='false')
     spawn_x      = LaunchConfiguration('spawn_x',      default='0.0')
     spawn_y      = LaunchConfiguration('spawn_y',      default='0.0')
-    spawn_z      = LaunchConfiguration('spawn_z',      default='2.5')
+    spawn_z      = LaunchConfiguration('spawn_z',      default='3.0')
     spawn_yaw    = LaunchConfiguration('spawn_yaw',    default='0.0')
 
     # -- 1. Gazebo + Bridge ------------------------------------------------
@@ -165,14 +165,17 @@ def generate_launch_description():
     #  LAUNCH SEQUENCE
     # ======================================================================
     #
+    #  (times from 02_robot_spawn.launch.py, included at t=0)
     #  t= 0s   Gazebo + bridge + RSP
     #  t= 3s   RViz
-    #  t= 8s   Spawn robot high above terrain, then let it settle
-    #  t=15s   Joint controllers + EKF
-    #  t=20s   SLAM Toolbox (provides map -> odom TF)
-    #  t=22s   OctoMap server (needs TF chain; must be before Nav2)
-    #  t=24s   Terrain pipeline (needs OctoMap data)
-    #  t=28s   Nav2 (static_layer subscribes to /projected_map from OctoMap)
+    #  t= 8s   Spawn robot (ros_gz_sim create, no use_sim_time)
+    #  t=14s   joint_state_broadcaster
+    #  t=16s   spooder_controller
+    #  t=18s   EKF
+    #  t=22s   SLAM Toolbox (map -> odom TF)
+    #  t=24s   OctoMap server (must precede Nav2)
+    #  t=26s   Terrain pipeline
+    #  t=32s   Nav2 (static_layer on /projected_map)
     #
     return LaunchDescription([
         # -- Arguments -------------------------------------------------------
@@ -181,7 +184,7 @@ def generate_launch_description():
         DeclareLaunchArgument('headless',     default_value='false'),
         DeclareLaunchArgument('spawn_x',      default_value='0.0'),
         DeclareLaunchArgument('spawn_y',      default_value='0.0'),
-        DeclareLaunchArgument('spawn_z',      default_value='2.5'),
+        DeclareLaunchArgument('spawn_z',      default_value='3.0'),
         DeclareLaunchArgument('spawn_yaw',    default_value='0.0'),
 
         # -- Phase 1: Infrastructure (immediate) ----------------------------
@@ -191,18 +194,18 @@ def generate_launch_description():
         # -- Phase 2: Visualization (t=3s) ----------------------------------
         TimerAction(period=3.0, actions=[rviz]),
 
-        # -- Phase 3: SLAM (t=20s — wait for robot + EKF) -------------------
-        TimerAction(period=20.0, actions=[slam]),
+        # -- Phase 3: SLAM (after EKF at t=18s) -----------------------------
+        TimerAction(period=22.0, actions=[slam]),
 
-        # -- Phase 4: OctoMap (t=22s — needs TF; must precede Nav2) ----------
-        TimerAction(period=22.0, actions=[octomap_server]),
+        # -- Phase 4: OctoMap (needs TF; must precede Nav2) -----------------
+        TimerAction(period=24.0, actions=[octomap_server]),
 
-        # -- Phase 5: Terrain pipeline (t=24-27s) ---------------------------
-        TimerAction(period=24.0, actions=[terrain_extract]),
-        TimerAction(period=25.0, actions=[terrain_cost]),
-        TimerAction(period=26.0, actions=[foothold_planner]),
-        TimerAction(period=27.0, actions=[gait_controller]),
+        # -- Phase 5: Terrain pipeline --------------------------------------
+        TimerAction(period=26.0, actions=[terrain_extract]),
+        TimerAction(period=27.0, actions=[terrain_cost]),
+        TimerAction(period=28.0, actions=[foothold_planner]),
+        TimerAction(period=29.0, actions=[gait_controller]),
 
-        # -- Phase 6: Nav2 (t=28s — /projected_map now available) -----------
-        TimerAction(period=28.0, actions=[nav2]),
+        # -- Phase 6: Nav2 --------------------------------------------------
+        TimerAction(period=32.0, actions=[nav2]),
     ])

@@ -15,11 +15,11 @@ This implements the dynamic replanning loop that is the core research contributi
 import rclpy
 from rclpy.node import Node
 import numpy as np
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, Point
 from grid_map_msgs.msg import GridMap
-from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
-from std_msgs.msg import UInt8MultiArray
+from std_msgs.msg import UInt8MultiArray, ColorRGBA
+from visualization_msgs.msg import Marker, MarkerArray
 
 from . import kinematics as kin
 
@@ -29,6 +29,17 @@ NUM_LEGS = 6
 # Swing phase enum
 STANCE = 0
 SWING  = 1
+
+# Distinct colors per leg (RGBA 0-1)
+LEG_COLORS = [
+    (1.0, 0.2, 0.2, 0.95),  # RF red
+    (1.0, 0.6, 0.1, 0.95),  # RM orange
+    (1.0, 1.0, 0.2, 0.95),  # RR yellow
+    (0.2, 1.0, 0.3, 0.95),  # LF green
+    (0.2, 0.6, 1.0, 0.95),  # LM blue
+    (0.7, 0.3, 1.0, 0.95),  # LR purple
+]
+LEG_NAMES = ['RF', 'RM', 'RR', 'LF', 'LM', 'LR']
 
 
 class FootholdPlannerNode(Node):
@@ -63,6 +74,10 @@ class FootholdPlannerNode(Node):
             self.create_publisher(PointStamped, f'/leg_{i}/foothold_replan', 10)
             for i in range(NUM_LEGS)
         ]
+        # Visualization of dynamic foothold placement (targets + lines to body)
+        self.marker_pub = self.create_publisher(MarkerArray, '/foothold_markers', 10)
+        self._target_points = [None] * NUM_LEGS  # last published world Point
+        self._target_is_replan = [False] * NUM_LEGS
 
         # Subscriptions
         self.create_subscription(GridMap, '/terrain_costmap', self.costmap_callback, 10)
@@ -70,6 +85,7 @@ class FootholdPlannerNode(Node):
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.create_subscription(UInt8MultiArray, '/leg_phase', self.phase_callback, 10)
 
+        self.create_timer(0.1, self._publish_markers)
         self.get_logger().info('Foothold planner node started')
 
     def terrain_callback(self, msg: GridMap):
@@ -120,6 +136,8 @@ class FootholdPlannerNode(Node):
         """Called by gait controller when leg touches down."""
         self.leg_phase[leg_idx] = STANCE
         self.committed_targets[leg_idx] = None
+        self._target_points[leg_idx] = None
+        self._target_is_replan[leg_idx] = False
 
     def _select_and_publish_foothold(self, leg_idx: int, replan: bool):
         if self.costmap is None or self.costmap_meta is None:
@@ -175,8 +193,85 @@ class FootholdPlannerNode(Node):
         pt.point.y = candidates[best_idx, 1]
         pt.point.z = candidates[best_idx, 2]
 
+        self._target_points[leg_idx] = pt.point
+        self._target_is_replan[leg_idx] = replan
+
         pub = self.replan_pubs[leg_idx] if replan else self.target_pubs[leg_idx]
         pub.publish(pt)
+        self._publish_markers()
+
+    def _publish_markers(self):
+        """RViz MarkerArray: spheres at foothold targets + lines from body."""
+        ma = MarkerArray()
+        stamp = self.get_clock().now().to_msg()
+        bx, by, bz, _ = self.body_pose
+
+        # Delete-all first so stale markers disappear when targets clear
+        clear = Marker()
+        clear.header.frame_id = 'map'
+        clear.header.stamp = stamp
+        clear.ns = 'footholds'
+        clear.id = 0
+        clear.action = Marker.DELETEALL
+        ma.markers.append(clear)
+
+        for i in range(NUM_LEGS):
+            pt = self._target_points[i]
+            if pt is None:
+                continue
+            r, g, b, a = LEG_COLORS[i]
+            # Mid-swing replan → white ring cue via higher scale / brighter
+            scale = 0.035 if self._target_is_replan[i] else 0.025
+
+            sphere = Marker()
+            sphere.header.frame_id = 'map'
+            sphere.header.stamp = stamp
+            sphere.ns = 'footholds'
+            sphere.id = i + 1
+            sphere.type = Marker.SPHERE
+            sphere.action = Marker.ADD
+            sphere.pose.position.x = pt.x
+            sphere.pose.position.y = pt.y
+            sphere.pose.position.z = pt.z
+            sphere.pose.orientation.w = 1.0
+            sphere.scale.x = sphere.scale.y = sphere.scale.z = scale
+            sphere.color = ColorRGBA(r=r, g=g, b=b, a=a)
+            sphere.lifetime.sec = 0
+            ma.markers.append(sphere)
+
+            line = Marker()
+            line.header.frame_id = 'map'
+            line.header.stamp = stamp
+            line.ns = 'foothold_rays'
+            line.id = i + 1
+            line.type = Marker.LINE_LIST
+            line.action = Marker.ADD
+            line.scale.x = 0.008
+            line.color = ColorRGBA(r=r, g=g, b=b, a=0.6)
+            line.points = [
+                Point(x=bx, y=by, z=bz),
+                Point(x=pt.x, y=pt.y, z=pt.z),
+            ]
+            ma.markers.append(line)
+
+            text = Marker()
+            text.header.frame_id = 'map'
+            text.header.stamp = stamp
+            text.ns = 'foothold_labels'
+            text.id = i + 1
+            text.type = Marker.TEXT_VIEW_FACING
+            text.action = Marker.ADD
+            text.pose.position.x = pt.x
+            text.pose.position.y = pt.y
+            text.pose.position.z = pt.z + 0.04
+            text.pose.orientation.w = 1.0
+            text.scale.z = 0.03
+            text.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.9)
+            tag = 'REPLAN' if self._target_is_replan[i] else 'TGT'
+            text.text = f'{LEG_NAMES[i]} {tag}'
+            ma.markers.append(text)
+
+        self.marker_pub.publish(ma)
 
     def _aep_pep_filter(self, candidates: np.ndarray, leg_idx: int) -> np.ndarray:
         """

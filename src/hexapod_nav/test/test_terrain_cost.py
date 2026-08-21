@@ -52,8 +52,8 @@ class TestGridMapLayerExtraction:
 
         layer = Float32MultiArray()
         n = 3
-        dim_x = MultiArrayDimension(label='column', size=n, stride=n * n)
-        dim_y = MultiArrayDimension(label='row', size=n, stride=n)
+        dim_x = MultiArrayDimension(label='column_index', size=n, stride=n * n)
+        dim_y = MultiArrayDimension(label='row_index', size=n, stride=n)
         layer.layout.dim = [dim_x, dim_y]
         layer.data = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
         msg.data.append(layer)
@@ -231,3 +231,34 @@ class TestUnknownAboveLayer:
         assert cost_high[0, 0] > cost_low[0, 0]
         assert cost_high[0, 0] == pytest.approx(0.4)
         assert cost_low[0, 0] == pytest.approx(0.1)
+
+
+class TestFrictionCost:
+    def test_flat_ground_friction_loss(self):
+        """Flat ground (slope=0) with mu=0.8 → loss = 1 - 0.8 = 0.2."""
+        slope = np.array([[0.0, 0.0], [0.0, 0.0]])
+        mu = 0.8
+        w_f = 0.6
+        slope_angle = np.arctan(slope)
+        friction_loss = 1.0 - mu * np.cos(slope_angle)
+        cost = w_f * friction_loss
+        assert cost[0, 0] == pytest.approx(0.6 * 0.2)
+        assert np.allclose(cost, 0.12)
+
+    def test_steep_slope_higher_friction_penalty(self):
+        """Steeper slope increases friction loss for the same mu."""
+        mu = 0.8
+        w_f = 0.6
+        flat = np.array([[0.0]])
+        steep = np.array([[1.0]])  # 45 deg
+        flat_loss = 1.0 - mu * np.cos(np.arctan(flat))
+        steep_loss = 1.0 - mu * np.cos(np.arctan(steep))
+        assert (w_f * steep_loss)[0, 0] > (w_f * flat_loss)[0, 0]
+
+    def test_low_mu_increases_penalty(self):
+        """Lower surface friction coefficient yields higher friction loss."""
+        slope = np.array([[0.5]])
+        slope_angle = np.arctan(slope)
+        loss_rubber = 1.0 - 0.8 * np.cos(slope_angle)
+        loss_ice = 1.0 - 0.3 * np.cos(slope_angle)
+        assert loss_ice[0, 0] > loss_rubber[0, 0]

@@ -48,6 +48,8 @@ colcon build --symlink-install --packages-select spooder_description spooder_gaz
 source install/setup.bash
 
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+# Localhost Gazebo transport discovery (avoids hung ros_gz_sim create)
+export GZ_IP="${GZ_IP:-127.0.0.1}"
 
 # Use the OctoMap/foothold-aware hexapod pipeline by default.
 USE_HEXAPOD_NAV="${USE_HEXAPOD_NAV:-1}"
@@ -61,13 +63,14 @@ log "Waiting for Gazebo to load..."
 sleep 8
 
 # 2. Spawn robot + EKF + controllers (+ skip old gait controller if hexapod_nav)
-SPAWN_ARGS=(spawn_x:=0.0 spawn_z:=2.5)
+SPAWN_ARGS=(spawn_x:=0.0 spawn_z:=3.0)
 if [ "$USE_HEXAPOD_NAV" = "1" ]; then
     SPAWN_ARGS+=(use_hexapod_nav:=true)
 fi
 launch_background ros2 launch spooder_gazebo 02_robot_spawn.launch.py "${SPAWN_ARGS[@]}"
 log "Waiting for robot spawn + EKF + controllers..."
-sleep 15
+# 02_robot_spawn: create@8s, joint_state@14s, controller@16s, ekf@18s
+sleep 22
 
 # 3. Start SLAM (provides map -> spooder/odom TF)
 launch_background ros2 launch spooder_navigation slam.launch.py

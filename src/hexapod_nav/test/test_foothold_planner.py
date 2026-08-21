@@ -17,8 +17,8 @@ class TestCostExtraction:
 
         layer = Float32MultiArray()
         n = 4
-        dim_x = MultiArrayDimension(label='column', size=n, stride=n * n)
-        dim_y = MultiArrayDimension(label='row', size=n, stride=n)
+        dim_x = MultiArrayDimension(label='column_index', size=n, stride=n * n)
+        dim_y = MultiArrayDimension(label='row_index', size=n, stride=n)
         layer.layout.dim = [dim_x, dim_y]
         layer.data = list(range(n * n))
         msg.data.append(layer)
@@ -43,8 +43,8 @@ class TestCostExtraction:
                       [0.35, 0.4, 0.4, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]]:
             layer = Float32MultiArray()
             n = 3
-            dim_x = MultiArrayDimension(label='column', size=n, stride=n * n)
-            dim_y = MultiArrayDimension(label='row', size=n, stride=n)
+            dim_x = MultiArrayDimension(label='column_index', size=n, stride=n * n)
+            dim_y = MultiArrayDimension(label='row_index', size=n, stride=n)
             layer.layout.dim = [dim_x, dim_y]
             layer.data = vals
             msg.data.append(layer)

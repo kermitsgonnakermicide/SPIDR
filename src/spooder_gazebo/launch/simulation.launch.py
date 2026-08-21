@@ -5,7 +5,7 @@ This is stripped down to the bare essentials to ensure it works.
 import os
 from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, TimerAction, ExecuteProcess
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, TimerAction, ExecuteProcess, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -35,7 +35,7 @@ def generate_launch_description():
     # Launch configurations
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     world_name = LaunchConfiguration('world', default='test_world')
-    spawn_z = LaunchConfiguration('spawn_z', default='2.5')
+    spawn_z = LaunchConfiguration('spawn_z', default='3.0')
 
     # World file path
     world_file = PathJoinSubstitution([pkg_spooder_gazebo, 'worlds', [world_name, '.sdf']])
@@ -82,6 +82,7 @@ def generate_launch_description():
     )
 
     # 4. SPAWN ROBOT INTO GAZEBO
+    # No use_sim_time — create only needs Gazebo transport discovery.
     spawn_entity = Node(
         package='ros_gz_sim',
         executable='create',
@@ -91,6 +92,7 @@ def generate_launch_description():
             '-name', 'spooder',
             '-x', '0.0', '-y', '0.0', '-z', spawn_z
         ],
+        additional_env={'GZ_IP': '127.0.0.1'},
         output='screen'
     )
 
@@ -162,35 +164,36 @@ def generate_launch_description():
     # Use TimerActions to ensure proper startup order
     
     return LaunchDescription([
+        SetEnvironmentVariable('GZ_IP', '127.0.0.1'),
         # Arguments
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('world', default_value='test_world'),
-        DeclareLaunchArgument('spawn_z', default_value='2.5'),
-        
+        DeclareLaunchArgument('spawn_z', default_value='3.0'),
+
         # Phase 1: Robot Description & TF (Immediate)
         robot_state_publisher,
-        
+
         # Phase 2: Bridge (Connects topics)
         bridge,
 
         # Phase 3: Gazebo (The heavy sim)
         TimerAction(period=2.0, actions=[gazebo]),
-        
+
         # Phase 4: Spawn Robot (t=8s - wait for Gazebo)
         TimerAction(period=8.0, actions=[spawn_entity]),
-        
-        # Phase 5: Controllers (t=15s)
-        TimerAction(period=15.0, actions=[joint_state_broadcaster_spawner]),
-        TimerAction(period=18.0, actions=[robot_controller_spawner]),
-        
-        # Phase 6: Localization & SLAM (t=20s)
-        TimerAction(period=20.0, actions=[ekf_node]),
-        TimerAction(period=25.0, actions=[slam_toolbox]),
-        
-        # Phase 7: Navigation (t=30s)
-        TimerAction(period=30.0, actions=[navigation]),
-        
-        # Phase 8: Application & Viz (t=5s - show RSP immediately)
-        TimerAction(period=35.0, actions=[gait_controller]),
+
+        # Phase 5: Controllers (after entity + gz_ros2_control)
+        TimerAction(period=14.0, actions=[joint_state_broadcaster_spawner]),
+        TimerAction(period=16.0, actions=[robot_controller_spawner]),
+
+        # Phase 6: Localization & SLAM
+        TimerAction(period=18.0, actions=[ekf_node]),
+        TimerAction(period=22.0, actions=[slam_toolbox]),
+
+        # Phase 7: Navigation
+        TimerAction(period=28.0, actions=[navigation]),
+
+        # Phase 8: Application & Viz
+        TimerAction(period=30.0, actions=[gait_controller]),
         TimerAction(period=5.0, actions=[rviz]),
     ])

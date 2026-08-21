@@ -11,16 +11,16 @@ import math
 import rclpy
 from rclpy.node import Node
 import numpy as np
-from geometry_msgs.msg import Twist, PointStamped
+from geometry_msgs.msg import Twist, PointStamped, Point
 from nav_msgs.msg import Odometry
 from grid_map_msgs.msg import GridMap
-from std_msgs.msg import Float64MultiArray, UInt8MultiArray
+from std_msgs.msg import Float64MultiArray, UInt8MultiArray, ColorRGBA
+from visualization_msgs.msg import Marker, MarkerArray
 
 from . import kinematics as kin
 
 NUM_LEGS = 6
 
-# Joint names in ros2_control order
 JOINT_NAMES = [
     'rf_coxa_joint', 'rf_femur_joint', 'rf_tibia_joint',
     'rm_coxa_joint', 'rm_femur_joint', 'rm_tibia_joint',
@@ -34,6 +34,15 @@ TRIPOD_A = [0, 2, 4]
 TRIPOD_B = [1, 3, 5]
 
 CMD_VEL_TIMEOUT = 0.5
+
+LEG_COLORS = [
+    (1.0, 0.2, 0.2, 0.85),
+    (1.0, 0.6, 0.1, 0.85),
+    (1.0, 1.0, 0.2, 0.85),
+    (0.2, 1.0, 0.3, 0.85),
+    (0.2, 0.6, 1.0, 0.85),
+    (0.7, 0.3, 1.0, 0.85),
+]
 
 
 def bezier_arc(p_start, p_end, height, t):
@@ -62,22 +71,20 @@ class GaitControllerNode(Node):
         self.default_z = self.get_parameter('nominal_stance_height').value
         self.default_x = self.get_parameter('nominal_stance_forward').value
 
-        # Foot positions in COXA frame (same for all legs initially)
         self.foot_positions = [np.array([self.default_x, 0.0, self.default_z])
                                for _ in range(NUM_LEGS)]
         self.swing_targets = [None] * NUM_LEGS
         self.swing_progress = [0.0] * NUM_LEGS
         self.active_tripod = 0
-        self.cmd_vel = np.zeros(2)
+        self.cmd_vel = np.zeros(3)  # vx, vy, yaw_rate
         self.last_cmd_stamp = self.get_clock().now()
         self.terrain_grid = None
 
-        # Body pose in odom frame
         self.body_x = 0.0
         self.body_y = 0.0
+        self.body_z = 0.0
         self.body_yaw = 0.0
 
-        # Subscriptions
         self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.create_subscription(GridMap, '/terrain_grid_map', self.terrain_callback, 10)
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
@@ -90,19 +97,18 @@ class GaitControllerNode(Node):
                 PointStamped, f'/leg_{i}/foothold_replan',
                 lambda msg, leg=i: self.replan_callback(msg, leg), 10)
 
-        # Publisher — Float64MultiArray to ros2_control
         self.joint_pub = self.create_publisher(
             Float64MultiArray, '/spooder_controller/commands', 10)
-
-        # Publisher — leg phase (0=STANCE, 1=SWING) for foothold planner
         self.phase_pub = self.create_publisher(
             UInt8MultiArray, '/leg_phase', 10)
+        self.foot_marker_pub = self.create_publisher(
+            MarkerArray, '/gait_foot_markers', 10)
 
         self.create_timer(1.0 / self.freq, self.control_loop)
         self.get_logger().info('Gait controller node started')
 
     def cmd_vel_callback(self, msg):
-        self.cmd_vel = np.array([msg.linear.x, msg.linear.y])
+        self.cmd_vel = np.array([msg.linear.x, msg.linear.y, msg.angular.z])
         self.last_cmd_stamp = self.get_clock().now()
 
     def terrain_callback(self, msg):
@@ -113,23 +119,23 @@ class GaitControllerNode(Node):
         q = msg.pose.pose.orientation
         self.body_x = p.x
         self.body_y = p.y
+        self.body_z = p.z
         self.body_yaw = 2.0 * np.arctan2(q.z, q.w)
 
     def target_callback(self, msg, leg):
         world_pt = np.array([msg.point.x, msg.point.y, msg.point.z])
-        body_pose = np.array([self.body_x, self.body_y, 0.0, self.body_yaw])
+        body_pose = np.array([self.body_x, self.body_y, self.body_z, self.body_yaw])
         coxa_pt = kin.world_to_coxa(world_pt, leg, body_pose)
         self.swing_targets[leg] = np.array(coxa_pt)
 
     def replan_callback(self, msg, leg):
         world_pt = np.array([msg.point.x, msg.point.y, msg.point.z])
-        body_pose = np.array([self.body_x, self.body_y, 0.0, self.body_yaw])
+        body_pose = np.array([self.body_x, self.body_y, self.body_z, self.body_yaw])
         coxa_pt = kin.world_to_coxa(world_pt, leg, body_pose)
         self.swing_targets[leg] = np.array(coxa_pt)
         self.get_logger().info(f'Leg {leg}: mid-swing replan')
 
     def _get_ceiling_clearance(self, world_pos):
-        """Look up ceiling clearance at a world XY position from terrain grid."""
         if self.terrain_grid is None:
             return self.max_height
         try:
@@ -166,34 +172,76 @@ class GaitControllerNode(Node):
         msg.data = joint_positions
         self.joint_pub.publish(msg)
 
-    def _publish_leg_phase(self):
-        """Publish current leg phase (0=STANCE, 1=SWING) for foothold planner."""
+    def _publish_leg_phase(self, moving: bool):
+        """Publish phase: all STANCE when stopped; swinging tripod = SWING when moving."""
         msg = UInt8MultiArray()
-        swinging = TRIPOD_A if self.active_tripod == 0 else TRIPOD_B
         phase = [0] * NUM_LEGS
-        for leg in swinging:
-            phase[leg] = 1
+        if moving:
+            swinging = TRIPOD_A if self.active_tripod == 0 else TRIPOD_B
+            for leg in swinging:
+                phase[leg] = 1
         msg.data = phase
         self.phase_pub.publish(msg)
+
+    def _publish_foot_markers(self):
+        """Show current foot tips in map frame (cylinders) for gait visualization."""
+        ma = MarkerArray()
+        stamp = self.get_clock().now().to_msg()
+        clear = Marker()
+        clear.header.frame_id = 'map'
+        clear.header.stamp = stamp
+        clear.ns = 'gait_feet'
+        clear.id = 0
+        clear.action = Marker.DELETEALL
+        ma.markers.append(clear)
+
+        body_pose = np.array([self.body_x, self.body_y, self.body_z, self.body_yaw])
+        swinging = set(TRIPOD_A if self.active_tripod == 0 else TRIPOD_B)
+
+        for leg in range(NUM_LEGS):
+            world = kin.coxa_to_world(self.foot_positions[leg], leg, body_pose)
+            r, g, b, a = LEG_COLORS[leg]
+            m = Marker()
+            m.header.frame_id = 'map'
+            m.header.stamp = stamp
+            m.ns = 'gait_feet'
+            m.id = leg + 1
+            m.type = Marker.CYLINDER
+            m.action = Marker.ADD
+            m.pose.position.x = float(world[0])
+            m.pose.position.y = float(world[1])
+            m.pose.position.z = float(world[2]) + 0.01
+            m.pose.orientation.w = 1.0
+            # Taller cylinder while swinging
+            tall = leg in swinging and (
+                abs(self.cmd_vel[0]) > 0.001 or abs(self.cmd_vel[1]) > 0.001
+                or abs(self.cmd_vel[2]) > 0.001)
+            m.scale.x = m.scale.y = 0.018
+            m.scale.z = 0.04 if tall else 0.02
+            m.color = ColorRGBA(r=r, g=g, b=b, a=a)
+            ma.markers.append(m)
+
+        self.foot_marker_pub.publish(ma)
 
     def control_loop(self):
         dt = 1.0 / self.freq
 
-        # Check cmd_vel timeout
         vel_age = (self.get_clock().now() - self.last_cmd_stamp).nanoseconds * 1e-9
         if vel_age > CMD_VEL_TIMEOUT:
-            self.cmd_vel = np.zeros(2)
+            self.cmd_vel = np.zeros(3)
 
-        # Standing: no velocity → hold position
-        if abs(self.cmd_vel[0]) < 0.001 and abs(self.cmd_vel[1]) < 0.001:
+        vx, vy, yaw_rate = self.cmd_vel
+        moving = abs(vx) >= 0.001 or abs(vy) >= 0.001 or abs(yaw_rate) >= 0.01
+
+        if not moving:
             self._solve_and_publish()
-            self._publish_leg_phase()
+            self._publish_leg_phase(moving=False)
+            self._publish_foot_markers()
             return
 
         swinging = TRIPOD_A if self.active_tripod == 0 else TRIPOD_B
         stance = TRIPOD_B if self.active_tripod == 0 else TRIPOD_A
 
-        # Advance swing progress
         all_done = True
         for leg in swinging:
             self.swing_progress[leg] = min(
@@ -204,29 +252,46 @@ class GaitControllerNode(Node):
         if all_done:
             for leg in swinging:
                 self.swing_progress[leg] = 0.0
+                self.swing_targets[leg] = None
             self.active_tripod = 1 - self.active_tripod
             swinging = TRIPOD_A if self.active_tripod == 0 else TRIPOD_B
             stance = TRIPOD_B if self.active_tripod == 0 else TRIPOD_A
 
-        # Swing: Bezier arc to target (all in coxa frame)
+        # Swing: Bezier arc to foothold target (or default step from cmd_vel)
         for leg in swinging:
             t = self.swing_progress[leg]
             target = self.swing_targets[leg]
             if target is None:
-                # Default: step forward + lateral in coxa frame
                 target = self.foot_positions[leg].copy()
-                target[0] += self.cmd_vel[0] * self.swing_dur
-                target[1] += self.cmd_vel[1] * self.swing_dur
-            arc_h = min(self.max_height, self._get_ceiling_clearance(target) * 0.6)
+                target[0] += vx * self.swing_dur
+                target[1] += vy * self.swing_dur
+                # Yaw: rotate default foothold slightly in coxa XY
+                if abs(yaw_rate) > 0.01:
+                    dtheta = yaw_rate * self.swing_dur
+                    c, s = math.cos(dtheta), math.sin(dtheta)
+                    x, y = target[0], target[1]
+                    target[0] = c * x - s * y
+                    target[1] = s * x + c * y
+            body_pose = np.array([self.body_x, self.body_y, self.body_z, self.body_yaw])
+            world_guess = kin.coxa_to_world(target, leg, body_pose)
+            arc_h = min(self.max_height, self._get_ceiling_clearance(world_guess) * 0.6)
             self.foot_positions[leg] = bezier_arc(
                 self.foot_positions[leg], target, arc_h, t)
 
-        # Stance: push feet backward (body moves forward + lateral)
+        # Stance: push feet opposite to body motion (incl. yaw)
         for leg in stance:
-            self.foot_positions[leg][0] -= self.cmd_vel[0] * dt
-            self.foot_positions[leg][1] -= self.cmd_vel[1] * dt
+            self.foot_positions[leg][0] -= vx * dt
+            self.foot_positions[leg][1] -= vy * dt
+            if abs(yaw_rate) > 0.01:
+                dtheta = -yaw_rate * dt
+                c, s = math.cos(dtheta), math.sin(dtheta)
+                x, y = self.foot_positions[leg][0], self.foot_positions[leg][1]
+                self.foot_positions[leg][0] = c * x - s * y
+                self.foot_positions[leg][1] = s * x + c * y
 
         self._solve_and_publish()
+        self._publish_leg_phase(moving=True)
+        self._publish_foot_markers()
 
 
 def main(args=None):

@@ -3,7 +3,7 @@ import tempfile
 import textwrap
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, OpaqueFunction
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, OpaqueFunction, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -92,6 +92,10 @@ def _launch_setup(context, *args, **kwargs):
     gz_args = f'-r -v 4 {"-s " if headless else ""}{world_file}'
     bridge_config = _write_bridge_config(world_name)
 
+    # Force localhost discovery so ros_gz_sim create / bridge can find the
+    # Gazebo server (especially under headless -s and multi-iface hosts).
+    gz_env = {'GZ_IP': '127.0.0.1'}
+
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
@@ -107,6 +111,7 @@ def _launch_setup(context, *args, **kwargs):
             'config_file': bridge_config,
             'use_sim_time': use_sim_time
         }],
+        additional_env=gz_env,
         output='screen'
     )
 
@@ -115,6 +120,7 @@ def _launch_setup(context, *args, **kwargs):
 
 def generate_launch_description():
     return LaunchDescription([
+        SetEnvironmentVariable('GZ_IP', '127.0.0.1'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('world', default_value='test_world'),
         DeclareLaunchArgument(

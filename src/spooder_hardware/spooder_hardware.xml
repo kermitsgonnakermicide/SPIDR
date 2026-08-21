@@ -1,0 +1,7 @@
+<library path="spooder_hardware">
+  <class name="spooder_hardware/ST3215System"
+         type="spooder_hardware::ST3215System"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>ros2_control hardware interface for Feetech ST3215 bus servos</description>
+  </class>
+</library>

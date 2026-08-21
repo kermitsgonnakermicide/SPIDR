@@ -7,9 +7,11 @@ Computes foothold cost per grid cell from terrain properties:
   - Roughness cost    (local variance of floor height)
   - Clearance cost    (ceiling - floor; hard-zero below swing threshold)
   - Unknown penalty   (unknown_above layer: continuous fraction 0..1)
+  - Friction cost     (surface friction vs slope angle — penalty for slip risk)
 
 Cost formula:
   cost(x,y) = w_s * slope(x,y) + w_r * roughness(x,y) + w_u * unknown_above(x,y)
+              + w_f * friction_loss(x,y)
   subject to: cost = INF if clearance(x,y) < min_swing_height
               or (strict_unknown=True AND unknown_above(x,y) > 0)
 """
@@ -18,7 +20,8 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 from grid_map_msgs.msg import GridMap
-from std_msgs.msg import Float32MultiArray, MultiArrayDimension
+
+from .grid_map_utils import make_layer
 
 
 class TerrainCostNode(Node):
@@ -29,12 +32,16 @@ class TerrainCostNode(Node):
         self.declare_parameter('w_slope', 1.0)
         self.declare_parameter('w_roughness', 0.8)
         self.declare_parameter('w_unknown', 0.5)         # Penalty for NaN/unknown ceiling
+        self.declare_parameter('w_friction', 0.6)        # Penalty for low-friction surfaces
+        self.declare_parameter('surface_friction_coefficient', 0.8)  # 0=ice, 1=rubber
         self.declare_parameter('min_swing_height', 0.12) # Minimum clearance for leg swing (m)
         self.declare_parameter('strict_unknown', True)   # Treat NaN ceiling as INFINITE cost
 
         self.w_s = self.get_parameter('w_slope').value
         self.w_r = self.get_parameter('w_roughness').value
         self.w_u = self.get_parameter('w_unknown').value
+        self.w_f = self.get_parameter('w_friction').value
+        self.mu = self.get_parameter('surface_friction_coefficient').value
         self.min_swing = self.get_parameter('min_swing_height').value
         self.strict_unknown = self.get_parameter('strict_unknown').value
 
@@ -65,6 +72,15 @@ class TerrainCostNode(Node):
         roughness = self._local_variance(floor, kernel=3)
         rough_norm = roughness / (roughness.max() + 1e-6)
         cost += self.w_r * rough_norm
+
+        # --- Friction cost ---
+        # Friction loss = 1 - mu * cos(slope_angle)
+        # On flat ground with mu=0.8: loss = 1 - 0.8*1.0 = 0.2 (low)
+        # On 45deg slope with mu=0.3: loss = 1 - 0.3*0.707 = 0.79 (high)
+        slope_angle = np.arctan(slope)
+        friction_factor = self.mu * np.cos(slope_angle)
+        friction_loss = 1.0 - friction_factor
+        cost += self.w_f * friction_loss
 
         # --- Clearance constraint ---
         if clearance is not None:
@@ -112,16 +128,7 @@ class TerrainCostNode(Node):
         gm.header = original.header
         gm.info = original.info
         gm.layers = ['cost']
-
-        layer = Float32MultiArray()
-        n = cost.shape[0]
-        dim_x = MultiArrayDimension(label='column', size=n, stride=n*n)
-        dim_y = MultiArrayDimension(label='row', size=n, stride=n)
-        layer.layout.dim = [dim_x, dim_y]
-        flat = cost.flatten(order='F').astype(np.float32)
-        layer.data = flat.tolist()
-        gm.data.append(layer)
-
+        gm.data.append(make_layer(np.asarray(cost, dtype=np.float32)))
         self.cost_pub.publish(gm)
 
 

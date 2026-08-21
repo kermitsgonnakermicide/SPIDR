@@ -1,6 +1,12 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction, ExecuteProcess
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    TimerAction,
+    ExecuteProcess,
+    SetEnvironmentVariable,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
@@ -17,19 +23,17 @@ def require_ros_package(package_name, apt_package):
             f"sudo apt-get install -y {apt_package}"
         ) from exc
 
+
 def generate_launch_description():
     require_ros_package('gz_ros2_control', 'ros-jazzy-gz-ros2-control')
 
-    # 1. Setup paths
     pkg_spooder_description = get_package_share_directory('spooder_description')
-    pkg_spooder_gazebo = get_package_share_directory('spooder_gazebo')
     pkg_spooder_navigation = get_package_share_directory('spooder_navigation')
     pkg_spooder_control = get_package_share_directory('spooder_control')
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     xacro_file = os.path.join(pkg_spooder_description, 'urdf', 'spooder.xacro')
 
-    # 2. Robot State Publisher
     controller_config_file = os.path.join(pkg_spooder_control, 'config', 'ros2_control.yaml')
     robot_description_config = ParameterValue(
         Command(['xacro ', xacro_file, ' config_file:=', controller_config_file]),
@@ -46,17 +50,18 @@ def generate_launch_description():
         }]
     )
 
-    # 3. Spawn Entity
+    # No use_sim_time on create — avoids hung world-name discovery.
     spawn_entity = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-topic', 'robot_description', '-name', 'spooder', '-z', '2.5'],
+        arguments=['-topic', 'robot_description', '-name', 'spooder', '-z', '3.0'],
+        additional_env={'GZ_IP': '127.0.0.1'},
         output='screen'
     )
 
-    # 4. Controllers (Delayed)
     load_spooder_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 'spooder_controller', '-c', 'controller_manager'],
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'active',
+             'spooder_controller', '-c', 'controller_manager'],
         output='screen'
     )
 
@@ -67,7 +72,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}]
     )
 
-    # 5. SLAM Toolbox (Layer 2)
     slam_toolbox = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_spooder_navigation, 'launch', 'slam.launch.py')
@@ -75,10 +79,8 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': 'true'}.items()
     )
 
-    # 6. Nav2 Stack (Layer 3)
-    # Re-using the logic from 03_custom_nav but inside the master launch
     nav2_params = os.path.join(pkg_spooder_navigation, 'config', 'nav2_params.yaml')
-    
+
     controller_server = Node(
         package='nav2_controller',
         executable='controller_server',
@@ -122,24 +124,18 @@ def generate_launch_description():
         }]
     )
 
-    # 7. Orchestration using TimerActions
     return LaunchDescription([
+        SetEnvironmentVariable('GZ_IP', '127.0.0.1'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
-        
-        # Layer 0: Basic TF
+
         robot_state_publisher,
-        spawn_entity,
 
-        # Layer 1: Controllers (After Spawn)
-        # joint_state_broadcaster currently segfaults inside gz_ros2_control on activation.
-        TimerAction(period=7.0, actions=[load_spooder_controller]),
-        TimerAction(period=9.0, actions=[gait_controller]),
-
-        # Layer 2: SLAM (After Controllers are stable)
-        TimerAction(period=12.0, actions=[slam_toolbox]),
-
-        # Layer 3: Nav2 (After SLAM has a map)
-        TimerAction(period=15.0, actions=[
+        # Spawn after Gazebo (world started separately / already up)
+        TimerAction(period=8.0, actions=[spawn_entity]),
+        TimerAction(period=14.0, actions=[load_spooder_controller]),
+        TimerAction(period=16.0, actions=[gait_controller]),
+        TimerAction(period=20.0, actions=[slam_toolbox]),
+        TimerAction(period=25.0, actions=[
             controller_server,
             planner_server,
             behavior_server,

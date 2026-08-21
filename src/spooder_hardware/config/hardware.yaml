@@ -1,0 +1,43 @@
+# Hardware parameters for ST3215 bus servos
+port: "/dev/ttyUSB0"
+baudrate: "1000000"
+timeout_ms: "50"
+
+# Joint-to-servo mapping (servo IDs must be configured on the physical servos)
+joints:
+  - name: rf_coxa_joint
+    servo_id: "1"
+  - name: rf_femur_joint
+    servo_id: "2"
+  - name: rf_tibia_joint
+    servo_id: "3"
+  - name: rm_coxa_joint
+    servo_id: "4"
+  - name: rm_femur_joint
+    servo_id: "5"
+  - name: rm_tibia_joint
+    servo_id: "6"
+  - name: rr_coxa_joint
+    servo_id: "7"
+  - name: rr_femur_joint
+    servo_id: "8"
+  - name: rr_tibia_joint
+    servo_id: "9"
+  - name: lf_coxa_joint
+    servo_id: "10"
+  - name: lf_femur_joint
+    servo_id: "11"
+  - name: lf_tibia_joint
+    servo_id: "12"
+  - name: lm_coxa_joint
+    servo_id: "13"
+  - name: lm_femur_joint
+    servo_id: "14"
+  - name: lm_tibia_joint
+    servo_id: "15"
+  - name: lr_coxa_joint
+    servo_id: "16"
+  - name: lr_femur_joint
+    servo_id: "17"
+  - name: lr_tibia_joint
+    servo_id: "18"

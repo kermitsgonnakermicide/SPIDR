@@ -47,17 +47,19 @@ def generate_launch_description():
     # Spawn position parameters
     spawn_x = LaunchConfiguration('spawn_x', default='0')
     spawn_y = LaunchConfiguration('spawn_y', default='0.0')
-    spawn_z = LaunchConfiguration('spawn_z', default='2.5')
+    spawn_z = LaunchConfiguration('spawn_z', default='3.0')
     spawn_yaw = LaunchConfiguration('spawn_yaw', default='0.0')
 
-    # 2. Spawn Entity (Injects model into Gazebo) - delayed to let Gazebo fully load
+    # 2. Spawn Entity (Injects model into Gazebo) - delayed to let Gazebo fully load.
+    # Do NOT set use_sim_time on create: it only needs Gazebo transport discovery and
+    # can hang forever waiting on /clock before it ever queries world names.
     spawn_entity = Node(
         package='ros_gz_sim',
         executable='create',
         arguments=['-topic', 'robot_description', '-name', 'spooder',
                    '-x', spawn_x, '-y', spawn_y, '-z', spawn_z, '-Y', spawn_yaw],
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}]
+        additional_env={'GZ_IP': '127.0.0.1'},
     )
 
     # 3. Controllers
@@ -111,16 +113,16 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('spawn_x', default_value='0'),
         DeclareLaunchArgument('spawn_y', default_value='0.0'),
-        DeclareLaunchArgument('spawn_z', default_value='2.5'),
+        DeclareLaunchArgument('spawn_z', default_value='3.0'),
         DeclareLaunchArgument('spawn_yaw', default_value='0.0'),
         DeclareLaunchArgument('use_hexapod_nav', default_value='false'),
 
         robot_state_publisher,
+        # Order matters: spawn robot first so gz_ros2_control advertises
+        # /controller_manager, then load controllers, then EKF / gait.
         TimerAction(period=8.0, actions=[spawn_entity]),
-
-        # Sequence
-        TimerAction(period=2.0, actions=[joint_state_broadcaster]),
-        TimerAction(period=4.0, actions=[controller]),
-        TimerAction(period=6.0, actions=[ekf]),
-        TimerAction(period=10.0, actions=[gait_controller]),
+        TimerAction(period=14.0, actions=[joint_state_broadcaster]),
+        TimerAction(period=16.0, actions=[controller]),
+        TimerAction(period=18.0, actions=[ekf]),
+        TimerAction(period=20.0, actions=[gait_controller]),
     ])

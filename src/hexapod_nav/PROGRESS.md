@@ -3,7 +3,7 @@
 ## Status: COMPLETE + integration fixes (updated 2026-07-22)
 
 All 4 pipeline nodes, kinematics, config files, launch files, and tests are implemented and passing.
-Build: clean. Tests: 84/84 passing.
+Build: clean. Tests: 87/87 passing.
 
 ---
 
@@ -60,7 +60,7 @@ Build: clean. Tests: 84/84 passing.
 ### Launch Files
 - `launch/full_pipeline.launch.py` — Real robot: OctoMap + Terrain + Planner + Gait + Nav2
 - `launch/simulation.launch.py` — Gazebo overlay: adds OctoMap + terrain pipeline
-- `launch/full_simulation.launch.py` — Full sim: spawns robot at z=2.5, loads OctoMap server
+- `launch/full_simulation.launch.py` — Full sim: spawns robot at z=3.0, loads OctoMap server
 
 ### Tests (84 total)
 - `test_kinematics.py` — 25 tests (IK, transforms, reachable zones, bezier arcs)
@@ -101,7 +101,7 @@ cd src/hexapod_nav && python3 -m pytest test/ -v
 
 1. **OctoMap ground filtering OFF** — `filter_ground: false` caused the floor plane to be marked as obstacle in the 2D projected map, flooding the Nav2 costmap with occupied cells on the ground. Nav2 could not find any free space to plan paths. Fixed: `filter_ground: true` with `max_distance: 0.15`.
 
-2. **Robot spawning inside ground / too low** — `start_spooder.sh` did not pass a useful `spawn_z` to `02_robot_spawn.launch.py`, and the shared spawn launch still defaulted to ground level. Robot spawned too low for rough terrain. Fixed: `spawn_z:=2.5` in the shared spawn launch, `start_spooder.sh`, `full_simulation.launch.py`, and older Gazebo bringup paths.
+2. **Robot spawning inside ground / too low** — `start_spooder.sh` did not pass a useful `spawn_z` to `02_robot_spawn.launch.py`, and the shared spawn launch still defaulted to ground level. Robot spawned too low for rough terrain. Fixed: canonical `spawn_z:=3.0` in `start_spooder.sh`, `02_robot_spawn.launch.py`, `full_simulation.launch.py`, `spooder_gazebo/launch/simulation.launch.py`, and `05_unified_bringup.launch.py`.
 
 3. **Nav2 global costmap missing obstacle_layer** — Only had `static_layer` (from OctoMap 2D projection) + `inflation_layer`. No real-time obstacle sensing. Fixed: added `obstacle_layer` using `/scan` data.
 
@@ -112,6 +112,16 @@ cd src/hexapod_nav && python3 -m pytest test/ -v
 6. **Nav2 launch/config drift** — `start_spooder.sh` started Nav2 before the hexapod OctoMap pipeline and used the legacy Nav2 params by default. Fixed: hexapod pipeline is default, starts before Nav2, and Nav2 receives `hexapod_nav/config/nav2_params.yaml`.
 
 7. **RViz RobotModel and OctoMap point clouds invisible** — RViz needed `TF Prefix: spooder` for prefixed robot_state_publisher frames, sensor-data QoS for Gazebo point clouds, and non-namespaced OctoMap topics. Fixed: `sim.rviz` now points at `/camera/points`, `/octomap_point_cloud_centers`, `/occupied_cells_vis_array`, and `/projected_map`.
+
+8. **OctoMap Z clipping at high spawn** — `point_cloud_max_z` / `occupancy_max_z` of `2.0` discarded geometry when the robot spawned at ~3 m. Fixed: cave-safe band `-2.0` … `8.0` in `octomap_params.yaml` (ground filter kept on for Nav2).
+
+9. **Spawn ordering / hung `ros_gz_sim create`** — Controllers started before the Gazebo entity existed; `create` with `use_sim_time` hung on world discovery. Fixed: spawn→controllers→EKF order, no sim-time on `create`, `GZ_IP=127.0.0.1`.
+
+10. **RViz `isRowMajor` spam** — GridMap layers used labels `column`/`row`; `grid_map_ros` requires `column_index`/`row_index`. Fixed via `grid_map_utils.make_layer()`.
+
+11. **Nav2 goal set but robot idle** — Gait ignored `angular.z` while RPP was rotate-to-heading (yaw-only cmd_vel), and `/leg_phase` was not published while walking so footholds never selected. Fixed: gait handles yaw rate, always publishes phase, RPP `use_rotate_to_heading: false`.
+
+12. **Foothold visualization** — `/foothold_markers` (target spheres + rays + labels) and `/gait_foot_markers` (live foot tips); enabled in `sim.rviz`.
 
 ---
 
