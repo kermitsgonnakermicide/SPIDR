@@ -90,4 +90,15 @@ def generate_launch_description():
                 output='screen'
             )
         ]),
+
+        # --- Robot State Viz (heading arrow, tilt disc, elevation text) ---
+        TimerAction(period=8.0, actions=[
+            Node(
+                package='hexapod_nav',
+                executable='robot_state_viz',
+                name='robot_state_viz',
+                parameters=[{'use_sim_time': use_sim_time}],
+                output='screen'
+            )
+        ]),
     ])

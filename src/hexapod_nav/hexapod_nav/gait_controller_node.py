@@ -85,7 +85,13 @@ class GaitControllerNode(Node):
         self.body_z = 0.0
         self.body_yaw = 0.0
 
-        self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
+        self.last_body_x = 0.0
+        self.last_body_y = 0.0
+        self.stuck_count = 0
+        self.recovery_mode = False
+        self.recovery_scale = 1.0
+
+        self.create_subscription(Twist, '/cmd_vel_nav', self.cmd_vel_callback, 10)
         self.create_subscription(GridMap, '/terrain_grid_map', self.terrain_callback, 10)
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
 
@@ -119,8 +125,28 @@ class GaitControllerNode(Node):
         q = msg.pose.pose.orientation
         self.body_x = p.x
         self.body_y = p.y
-        self.body_z = p.z
+        self.body_z = self._get_terrain_floor_height(p.x, p.y)
         self.body_yaw = 2.0 * np.arctan2(q.z, q.w)
+
+    def _update_stuck_detection(self):
+        dx = abs(self.body_x - self.last_body_x)
+        dy = abs(self.body_y - self.last_body_y)
+        moved = (dx > 0.001) or (dy > 0.001)
+        self.last_body_x = self.body_x
+        self.last_body_y = self.body_y
+        if moved:
+            self.stuck_count = 0
+            self.recovery_mode = False
+            self.recovery_scale = 1.0
+        else:
+            self.stuck_count += 1
+            if self.stuck_count > int(self.freq * 1.5):
+                if not self.recovery_mode:
+                    self.get_logger().warn(
+                        f'Stuck for {self.stuck_count} cycles, entering recovery mode '
+                        f'(scale={self.recovery_scale:.2f})')
+                self.recovery_mode = True
+                self.recovery_scale = max(0.3, self.recovery_scale - 0.02)
 
     def target_callback(self, msg, leg):
         world_pt = np.array([msg.point.x, msg.point.y, msg.point.z])
@@ -135,6 +161,29 @@ class GaitControllerNode(Node):
         self.swing_targets[leg] = np.array(coxa_pt)
         self.get_logger().info(f'Leg {leg}: mid-swing replan')
 
+    def _get_terrain_floor_height(self, wx, wy):
+        """Query the 'floor' layer of the terrain grid map at (wx, wy) to get terrain height."""
+        if self.terrain_grid is None:
+            return 0.0
+        try:
+            idx = self.terrain_grid.layers.index('floor')
+        except ValueError:
+            return 0.0
+        data = self.terrain_grid.data[idx]
+        n = data.layout.dim[0].size
+        res = self.terrain_grid.info.resolution
+        cx = self.terrain_grid.info.pose.position.x
+        cy = self.terrain_grid.info.pose.position.y
+        # GridMap convention: index 0 = positive corner, so invert the mapping
+        ix = int((cx + self.terrain_grid.info.length_x / 2 - wx) / res)
+        iy = int((cy + self.terrain_grid.info.length_y / 2 - wy) / res)
+        if 0 <= ix < n and 0 <= iy < n:
+            flat = np.array(data.data, dtype=np.float32)
+            val = flat[ix + iy * n]
+            if np.isfinite(val):
+                return float(val)
+        return 0.0
+
     def _get_ceiling_clearance(self, world_pos):
         if self.terrain_grid is None:
             return self.max_height
@@ -147,23 +196,39 @@ class GaitControllerNode(Node):
         res = self.terrain_grid.info.resolution
         cx = self.terrain_grid.info.pose.position.x
         cy = self.terrain_grid.info.pose.position.y
-        ix = int((world_pos[0] - (cx - self.terrain_grid.info.length_x / 2)) / res)
-        iy = int((world_pos[1] - (cy - self.terrain_grid.info.length_y / 2)) / res)
+        # GridMap convention: index 0 = positive corner
+        ix = int((cx + self.terrain_grid.info.length_x / 2 - world_pos[0]) / res)
+        iy = int((cy + self.terrain_grid.info.length_y / 2 - world_pos[1]) / res)
         if 0 <= ix < n and 0 <= iy < n:
             flat = np.array(data.data, dtype=np.float32)
-            val = flat[ix * n + iy]
+            val = flat[ix + iy * n]
             if np.isfinite(val) and val > 0:
                 return float(val)
         return self.max_height
+
+    def _default_foot(self, leg):
+        """Return the default (standing) coxa-frame foot position for a leg."""
+        return np.array([self.default_x, 0.0, self.default_z])
+
+    def _body_vel_to_coxa(self, vx_body, vy_body, leg):
+        """Rotate body-frame (vx, vy) into the given leg's coxa frame."""
+        angle = kin.LEG_ANGLES[leg]
+        cos_a = math.cos(-angle)
+        sin_a = math.sin(-angle)
+        local_vx = vx_body * cos_a - vy_body * sin_a
+        local_vy = vx_body * sin_a + vy_body * cos_a
+        return local_vx, local_vy
 
     def _solve_and_publish(self):
         msg = Float64MultiArray()
         joint_positions = []
         for leg in range(NUM_LEGS):
-            q1, q2, q3 = kin.ik_coxa(
-                self.foot_positions[leg][0],
-                self.foot_positions[leg][1],
-                self.foot_positions[leg][2])
+            fx, fy, fz = self.foot_positions[leg]
+            if not kin.is_reachable(fx, fy, fz):
+                self.foot_positions[leg] = np.array(
+                    kin.clamp_to_reach(fx, fy, fz))
+                fx, fy, fz = self.foot_positions[leg]
+            q1, q2, q3 = kin.ik_coxa(fx, fy, fz)
             joint_positions.extend([
                 max(kin.COXA_LIMITS[0], min(kin.COXA_LIMITS[1], q1)),
                 max(kin.FEMUR_LIMITS[0], min(kin.FEMUR_LIMITS[1], q2)),
@@ -230,14 +295,33 @@ class GaitControllerNode(Node):
         if vel_age > CMD_VEL_TIMEOUT:
             self.cmd_vel = np.zeros(3)
 
-        vx, vy, yaw_rate = self.cmd_vel
-        moving = abs(vx) >= 0.001 or abs(vy) >= 0.001 or abs(yaw_rate) >= 0.01
+        vx_global, vy_global, yaw_rate = self.cmd_vel
+        cos_y = math.cos(-self.body_yaw)
+        sin_y = math.sin(-self.body_yaw)
+        vx = vx_global * cos_y - vy_global * sin_y
+        vy = vx_global * sin_y + vy_global * cos_y
+        moving = abs(vx_global) >= 0.001 or abs(vy_global) >= 0.001 or abs(yaw_rate) >= 0.01
+
+        self._update_stuck_detection()
 
         if not moving:
+            self.stuck_count = 0
+            self.recovery_mode = False
+            self.recovery_scale = 1.0
+            for leg in range(NUM_LEGS):
+                self.foot_positions[leg] = self._default_foot(leg)
+            self.swing_progress = [0.0] * NUM_LEGS
+            self.swing_targets = [None] * NUM_LEGS
+            self.active_tripod = 0
             self._solve_and_publish()
             self._publish_leg_phase(moving=False)
             self._publish_foot_markers()
             return
+
+        if self.recovery_mode:
+            vx *= self.recovery_scale
+            vy *= self.recovery_scale
+            yaw_rate *= self.recovery_scale
 
         swinging = TRIPOD_A if self.active_tripod == 0 else TRIPOD_B
         stance = TRIPOD_B if self.active_tripod == 0 else TRIPOD_A
@@ -262,9 +346,14 @@ class GaitControllerNode(Node):
             t = self.swing_progress[leg]
             target = self.swing_targets[leg]
             if target is None:
-                target = self.foot_positions[leg].copy()
-                target[0] += vx * self.swing_dur
-                target[1] += vy * self.swing_dur
+                local_vx, local_vy = self._body_vel_to_coxa(vx, vy, leg)
+                if self.recovery_mode:
+                    blend = 0.5
+                    target = self.foot_positions[leg] * (1 - blend) + self._default_foot(leg) * blend
+                else:
+                    target = self.foot_positions[leg].copy()
+                target[0] += local_vx * self.swing_dur
+                target[1] += local_vy * self.swing_dur
                 # Yaw: rotate default foothold slightly in coxa XY
                 if abs(yaw_rate) > 0.01:
                     dtheta = yaw_rate * self.swing_dur
@@ -272,6 +361,8 @@ class GaitControllerNode(Node):
                     x, y = target[0], target[1]
                     target[0] = c * x - s * y
                     target[1] = s * x + c * y
+                target[0], target[1], target[2] = kin.clamp_to_reach(
+                    target[0], target[1], target[2])
             body_pose = np.array([self.body_x, self.body_y, self.body_z, self.body_yaw])
             world_guess = kin.coxa_to_world(target, leg, body_pose)
             arc_h = min(self.max_height, self._get_ceiling_clearance(world_guess) * 0.6)
@@ -279,15 +370,27 @@ class GaitControllerNode(Node):
                 self.foot_positions[leg], target, arc_h, t)
 
         # Stance: push feet opposite to body motion (incl. yaw)
+        stance_vel_scale = 0.4 if self.recovery_mode else 1.0
         for leg in stance:
-            self.foot_positions[leg][0] -= vx * dt
-            self.foot_positions[leg][1] -= vy * dt
+            local_vx, local_vy = self._body_vel_to_coxa(vx, vy, leg)
+            self.foot_positions[leg][0] -= local_vx * dt * stance_vel_scale
+            self.foot_positions[leg][1] -= local_vy * dt * stance_vel_scale
             if abs(yaw_rate) > 0.01:
                 dtheta = -yaw_rate * dt
                 c, s = math.cos(dtheta), math.sin(dtheta)
                 x, y = self.foot_positions[leg][0], self.foot_positions[leg][1]
                 self.foot_positions[leg][0] = c * x - s * y
                 self.foot_positions[leg][1] = s * x + c * y
+            self.foot_positions[leg][0], self.foot_positions[leg][1], self.foot_positions[leg][2] = \
+                kin.clamp_to_reach(
+                    self.foot_positions[leg][0],
+                    self.foot_positions[leg][1],
+                    self.foot_positions[leg][2])
+            if self.recovery_mode:
+                blend = 0.1
+                self.foot_positions[leg] = (
+                    self.foot_positions[leg] * (1 - blend)
+                    + self._default_foot(leg) * blend)
 
         self._solve_and_publish()
         self._publish_leg_phase(moving=True)

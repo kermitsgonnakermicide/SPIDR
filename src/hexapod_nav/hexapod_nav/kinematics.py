@@ -96,6 +96,42 @@ def ik_coxa(x, y, z):
     return (q_coxa, q_femur, q_tibia)
 
 
+def is_reachable(x, y, z):
+    """
+    Check if a coxa-frame foot position is within IK workspace.
+    Returns True if reachable, False otherwise.
+    """
+    q_coxa = math.atan2(y, x)
+    if not (COXA_LIMITS[0] <= q_coxa <= COXA_LIMITS[1]):
+        return False
+    horizontal_dist = math.sqrt(x**2 + y**2) - COXA_LEN
+    L = math.sqrt(horizontal_dist**2 + z**2)
+    return abs(FEMUR_LEN - TIBIA_LEN) <= L <= FEMUR_LEN + TIBIA_LEN
+
+
+def clamp_to_reach(x, y, z):
+    """
+    Clamp a coxa-frame foot position to the nearest reachable point.
+    If already reachable, returns (x, y, z) unchanged.
+    Scales the XY offset from origin to fit within the IK workspace at height z.
+    """
+    if is_reachable(x, y, z):
+        return x, y, z
+
+    r_xy = math.sqrt(x**2 + y**2)
+    if r_xy < 1e-6:
+        return x, y, z
+
+    # Max horizontal distance from coxa at height z
+    max_L = FEMUR_LEN + TIBIA_LEN
+    max_h = math.sqrt(max(max_L**2 - z**2, 0.0))
+    max_r_xy = max_h + COXA_LEN
+
+    # Scale XY to fit
+    scale = max_r_xy / r_xy * 0.99
+    return x * scale, y * scale, z
+
+
 def ik_leg(target_body, leg_index):
     """
     IK for body-frame coordinates. Used by foothold planner for reachability.
@@ -197,16 +233,34 @@ def get_reachable_zone(leg_index, body_pose, grid_positions):
     body_pose: (x, y, z, yaw) of robot body in world frame
     grid_positions: (N, 3) array of candidate foothold positions
     """
-    reachable = np.zeros(len(grid_positions), dtype=bool)
+    bx, by, bz, byaw = body_pose
+    origin = LEG_ORIGINS[leg_index]
+    angle = LEG_ANGLES[leg_index]
 
-    for i, wp in enumerate(grid_positions):
-        coxa_pt = world_to_coxa(wp, leg_index, body_pose)
-        result = _law_of_cosines_ik(
-            math.sqrt(coxa_pt[0]**2 + coxa_pt[1]**2) - COXA_LEN,
-            coxa_pt[2])
-        # Also check coxa yaw
-        q_coxa = math.atan2(coxa_pt[1], coxa_pt[0])
-        reachable[i] = (result is not None and
-                        COXA_LIMITS[0] <= q_coxa <= COXA_LIMITS[1])
+    cos_y = np.cos(-byaw)
+    sin_y = np.sin(-byaw)
+    cos_a = np.cos(-angle)
+    sin_a = np.sin(-angle)
+
+    dx = grid_positions[:, 0] - bx
+    dy = grid_positions[:, 1] - by
+    body_x = dx * cos_y - dy * sin_y
+    body_y = dx * sin_y + dy * cos_y
+    body_z = grid_positions[:, 2] - bz
+
+    tx = body_x - origin[0]
+    ty = body_y - origin[1]
+    tz = body_z - origin[2]
+    coxa_x = tx * cos_a - ty * sin_a
+    coxa_y = tx * sin_a + ty * cos_a
+
+    q_coxa = np.arctan2(coxa_y, coxa_x)
+    coxa_ok = (q_coxa >= COXA_LIMITS[0]) & (q_coxa <= COXA_LIMITS[1])
+
+    horizontal_dist = np.sqrt(coxa_x**2 + coxa_y**2) - COXA_LEN
+    L = np.sqrt(horizontal_dist**2 + tz**2)
+    femur_tibia_sum = FEMUR_LEN + TIBIA_LEN
+    femur_tibia_diff = abs(FEMUR_LEN - TIBIA_LEN)
+    reachable = coxa_ok & (L >= femur_tibia_diff) & (L <= femur_tibia_sum)
 
     return reachable

@@ -1,0 +1,123 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="plain_world">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="libgz-sim-physics-system.so" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="libgz-sim-scene-broadcaster-system.so" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="libgz-sim-contact-system.so" name="gz::sim::systems::Contact"/>
+
+    <scene>
+      <ambient>0.5 0.5 0.5</ambient>
+      <sky/>
+    </scene>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation><range>1000</range><constant>0.9</constant><linear>0.01</linear><quadratic>0.001</quadratic></attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- Ground plane -->
+    <model name="ground">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <material>
+            <ambient>0.3 0.3 0.3 1</ambient>
+            <diffuse>0.4 0.4 0.4 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Obstacle 1: tall box -->
+    <model name="tall_box">
+      <static>true</static>
+      <pose>1.5 0.8 0.3 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.6</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient></material>
+        </visual>
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.6</size></box></geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- Obstacle 2: short wide box -->
+    <model name="short_box">
+      <static>true</static>
+      <pose>-1.0 1.2 0.1 0 0 0.4</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.5 0.3 0.2</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient></material>
+        </visual>
+        <collision name="collision">
+          <geometry><box><size>0.5 0.3 0.2</size></box></geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- Obstacle 3: cylinder -->
+    <model name="pillar">
+      <static>true</static>
+      <pose>2.0 -1.0 0.25 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.12</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>0.45 0.45 0.45 1</ambient></material>
+        </visual>
+        <collision name="collision">
+          <geometry><cylinder><radius>0.12</radius><length>0.5</length></cylinder></geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- Obstacle 4: low step -->
+    <model name="step">
+      <static>true</static>
+      <pose>-0.5 -1.5 0.05 0 0 0.2</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.6 0.2 0.1</size></box></geometry>
+          <material><ambient>0.55 0.55 0.55 1</ambient></material>
+        </visual>
+        <collision name="collision">
+          <geometry><box><size>0.6 0.2 0.1</size></box></geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- Obstacle 5: bollard -->
+    <model name="bollard">
+      <static>true</static>
+      <pose>-2.0 0.0 0.15 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.08</radius><length>0.3</length></cylinder></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient></material>
+        </visual>
+        <collision name="collision">
+          <geometry><cylinder><radius>0.08</radius><length>0.3</length></cylinder></geometry>
+        </collision>
+      </link>
+    </model>
+
+  </world>
+</sdf>

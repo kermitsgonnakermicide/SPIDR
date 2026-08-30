@@ -1,4 +1,7 @@
 ### ekf config file ###
+# 2D mode: stable flat TF. IMU fused for yaw-velocity only (no orientation, no accel).
+# TF: spooder/odom -> spooder/base_footprint is flat (roll/pitch ignored).
+# Tilt awareness via robot_state_viz node (reads /odom from Gazebo, not EKF).
 ekf_filter_node:
     ros__parameters:
         frequency: 30.0
@@ -10,7 +13,7 @@ ekf_filter_node:
         base_link_frame: spooder/base_footprint
         world_frame: spooder/odom
 
-        # Fuse simulated odometry (position + velocity)
+        # Fuse simulated odometry (position + velocity) — flat 2D only
         odom0: /odom
         odom0_config: [true,  true,  false,
                        false, false, true,
@@ -20,7 +23,7 @@ ekf_filter_node:
         odom0_relative: false
         odom0_differential: false
 
-        # Fuse IMU (yaw + angular velocity z)
+        # Fuse IMU — angular velocity yaw only (no orientation, no acceleration)
         imu0: /imu
         imu0_config: [false, false, false,
                       false, false, true,

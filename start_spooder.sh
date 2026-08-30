@@ -57,13 +57,18 @@ HEX_PREFIX="$(ros2 pkg prefix hexapod_nav)"
 HEX_NAV_PARAMS="$HEX_PREFIX/share/hexapod_nav/config/nav2_params.yaml"
 HEX_RVIZ_CONFIG="$HEX_PREFIX/share/hexapod_nav/rviz/sim.rviz"
 
+# World selection: set SPOODER_WORLD env var or use first argument.
+# Available: test_world, plain_world, rough_terrain, cave_world, maze_world, foothold_terrain
+SPOODER_WORLD="${1:-${SPOODER_WORLD:-plain_world}}"
+
 # 1. Start Gazebo with world
-launch_background ros2 launch spooder_gazebo 01_sim_world.launch.py headless:=false
+log "World: $SPOODER_WORLD"
+launch_background ros2 launch spooder_gazebo 01_sim_world.launch.py world:=$SPOODER_WORLD headless:=false
 log "Waiting for Gazebo to load..."
 sleep 8
 
 # 2. Spawn robot + EKF + controllers (+ skip old gait controller if hexapod_nav)
-SPAWN_ARGS=(spawn_x:=0.0 spawn_z:=3.0)
+SPAWN_ARGS=(spawn_x:=0.0 spawn_y:=0.6 spawn_z:=3.0)
 if [ "$USE_HEXAPOD_NAV" = "1" ]; then
     SPAWN_ARGS+=(use_hexapod_nav:=true)
 fi
@@ -72,10 +77,13 @@ log "Waiting for robot spawn + EKF + controllers..."
 # 02_robot_spawn: create@8s, joint_state@14s, controller@16s, ekf@18s
 sleep 22
 
-# 3. Start SLAM (provides map -> spooder/odom TF)
-launch_background ros2 launch spooder_navigation slam.launch.py
-log "Waiting for SLAM to initialize..."
-sleep 5
+# 3. Static map->odom transform (SLAM disabled; lidar removed)
+# Nav2 needs a map->odom TF; we publish a static identity transform so
+# the global frame is effectively the odom frame. This means the costmap
+# drifts with odometry, but the robot can still be commanded via /goal_pose.
+launch_background ros2 run tf2_ros static_transform_publisher -- --frame-id map --child-frame-id spooder/odom --x 0 --y 0 --z 0 --roll 0 --pitch 0 --yaw 0
+log "Waiting for static transform..."
+sleep 2
 
 # 4. Start hexapod_nav OctoMap + terrain pipeline before Nav2 consumes /projected_map.
 if [ "$USE_HEXAPOD_NAV" = "1" ]; then
@@ -92,6 +100,9 @@ fi
 launch_background ros2 launch spooder_navigation navigation.launch.py "${NAV_ARGS[@]}"
 log "Waiting for Nav2 to activate..."
 sleep 5
+
+# 5b. Start Rerun.io bridge (replaces RViz)
+launch_background ros2 run hexapod_nav rerun_bridge
 
 # 6. Start RViz (foreground - closing it stops everything)
 log "Starting RViz..."

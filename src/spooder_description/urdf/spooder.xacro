@@ -236,9 +236,6 @@
       </plugin>
   </gazebo>
 
-  <!-- Instantiate LiDAR Sensor -->
-  <xacro:lidar_sensor parent="base_link"/>
-
   <!-- Instantiate IMU Sensor -->
   <xacro:imu_sensor parent_link="base_link"/>
 

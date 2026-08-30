@@ -13,14 +13,25 @@ octomap_server:
       max: 0.97
     publish_free_space: false
     latch: true
-    filter_ground: true
-    ground_detection:
-      max_distance: 0.15
-      min_distance: 0.0
-    # Publish 2D projected OccupancyGrid on /projected_map for Nav2 static_layer + RViz
+    # Ground plane filter OFF: it strips floor voxels from the octree entirely,
+    # starving the terrain pipeline. Instead we keep floor voxels in the octree
+    # + published cloud (point_cloud_* filters) but exclude them from the 2D
+    # projection AND the RViz occupied-cells vis via occupancy_min_z (both use
+    # the occupancy filter). Walkable floor never reaches Nav2 or the vis.
+    filter_ground_plane: false
+    ground_filter:
+      distance: 1.0        # use points up to 1m from sensor for plane fit
+      angle: 0.35          # max plane tilt from horizontal (~20 deg)
+      plane_distance: 0.10 # voxels within 10cm of fitted plane = ground
+    filter_speckles: true
+    # Publish 2D projected OccupancyGrid on /projected_map for Nav2 static_layer
     publish_2d_map: true
-    # Height filters: cave-safe band for high spawn (~3m) and overhangs
+    # Height filters.
+    # point_cloud_*: what lands in the octree / published cloud (terrain node
+    # needs floor voxels, keep low).
+    # occupancy_*: what the 2D projection includes. 0.08 = above floor level,
+    # so the walkable floor can NEVER flood the Nav2 costmap as lethal.
     point_cloud_min_z: -2.0
     point_cloud_max_z: 8.0
-    occupancy_min_z: -2.0
+    occupancy_min_z: 0.08
     occupancy_max_z: 8.0

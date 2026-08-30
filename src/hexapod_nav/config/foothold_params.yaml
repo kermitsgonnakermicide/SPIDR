@@ -5,15 +5,15 @@ terrain_cost_node:
     w_unknown: 0.5
     w_friction: 0.6
     surface_friction_coefficient: 0.8
-    min_swing_height: 0.12
+    min_swing_height: 0.02
     strict_unknown: false
 
 foothold_planner_node:
   ros__parameters:
-    replan_cost_threshold: 0.3
+    replan_cost_threshold: 0.5
     nominal_stance_height: -0.12
-    aep_forward_offset: 0.05
-    pep_backward_offset: 0.05
+    aep_forward_offset: 0.15
+    pep_backward_offset: 0.15
 
 gait_controller_node:
   ros__parameters:

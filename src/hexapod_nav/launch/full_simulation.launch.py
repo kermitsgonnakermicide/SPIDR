@@ -140,6 +140,15 @@ def generate_launch_description():
         output='screen',
     )
 
+    # -- 9. Robot State Viz (heading arrow, tilt disc, elevation text) -----
+    robot_state_viz = Node(
+        package='hexapod_nav',
+        executable='robot_state_viz',
+        name='robot_state_viz',
+        parameters=[{'use_sim_time': use_sim_time}],
+        output='screen',
+    )
+
     # -- 9. Nav2 (uses hexapod_nav's OctoMap-projected costmaps) -----------
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -205,6 +214,7 @@ def generate_launch_description():
         TimerAction(period=27.0, actions=[terrain_cost]),
         TimerAction(period=28.0, actions=[foothold_planner]),
         TimerAction(period=29.0, actions=[gait_controller]),
+        TimerAction(period=30.0, actions=[robot_state_viz]),
 
         # -- Phase 6: Nav2 --------------------------------------------------
         TimerAction(period=32.0, actions=[nav2]),

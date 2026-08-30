@@ -25,6 +25,8 @@ setup(
             'terrain_cost_node    = hexapod_nav.terrain_cost_node:main',
             'foothold_planner_node = hexapod_nav.foothold_planner_node:main',
             'gait_controller_node  = hexapod_nav.gait_controller_node:main',
+            'rerun_bridge          = hexapod_nav.rerun_bridge:main',
+            'robot_state_viz       = hexapod_nav.robot_state_viz:main',
         ],
     },
 )

@@ -1,8 +1,7 @@
 # hexapod_nav Nav2 configuration — OctoMap-based 3D-aware costmaps.
-# Global costmap uses the 2D projected OctoMap (static_layer) for body-path planning.
-# The raw OctoMap point cloud is NOT used directly — in a fully-3D world it
-# marks every voxel as obstacle including the floor itself, flooding the costmap.
-# Local costmap uses /scan for real-time obstacle avoidance.
+# LIDAR removed; no scan-based obstacle layer. Local costmap is empty (no
+# real-time obstacle avoidance); navigation is open-loop with OctoMap-derived
+# static terrain.
 # Controller uses RegulatedPurePursuit for slow hexapod-appropriate motion.
 
 amcl:
@@ -76,7 +75,7 @@ behavior_server:
 controller_server:
   ros__parameters:
     use_sim_time: True
-    controller_frequency: 10.0
+    controller_frequency: 15.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
@@ -87,8 +86,8 @@ controller_server:
 
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.1
-      movement_time_allowance: 15.0
+      required_movement_radius: 0.05
+      movement_time_allowance: 60.0
 
     general_goal_checker:
       stateful: True
@@ -98,18 +97,18 @@ controller_server:
 
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.08
-      lookahead_dist: 0.4
-      min_lookahead_dist: 0.2
-      max_lookahead_dist: 0.8
+      desired_linear_vel: 0.15
+      max_linear_vel: 0.20
+      lookahead_dist: 0.5
+      min_lookahead_dist: 0.25
+      max_lookahead_dist: 1.0
       use_velocity_scaled_lookahead_dist: false
       transform_tolerance: 2.0
       use_sim_time: True
-      # Hexapod gait handles yaw via foot rotation — don't stall on rotate-in-place
       use_rotate_to_heading: false
       allow_reversing: true
       min_approach_linear_velocity: 0.02
-      approach_velocity_scaling_dist: 0.4
+      approach_velocity_scaling_dist: 0.3
 
 planner_server:
   ros__parameters:
@@ -138,14 +137,11 @@ route_server:
     boundary_radius_to_achieve_node: 1.0
     radius_to_achieve_node: 2.0
     smooth_corners: true
-    operations: ["AdjustSpeedLimit", "ReroutingService", "CollisionMonitor"]
+    operations: ["AdjustSpeedLimit", "ReroutingService"]
     ReroutingService:
       plugin: "nav2_route::ReroutingService"
     AdjustSpeedLimit:
       plugin: "nav2_route::AdjustSpeedLimit"
-    CollisionMonitor:
-      plugin: "nav2_route::CollisionMonitor"
-      max_collision_dist: 3.0
     edge_cost_functions: ["DistanceScorer", "CostmapScorer"]
     DistanceScorer:
       plugin: "nav2_route::DistanceScorer"
@@ -166,7 +162,7 @@ global_costmap:
       rolling_window: true
       width: 20
       height: 20
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         enabled: True
@@ -174,21 +170,6 @@ global_costmap:
         map_subscribe_transient_local: True
         subscribe_to_updates: True
         transform_tolerance: 2.0
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: scan
-        scan:
-          topic: /scan
-          max_obstacle_height: 0.6
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          min_obstacle_height: 0.05
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         inflation_radius: 0.20
@@ -197,7 +178,7 @@ global_costmap:
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 8.0
+      update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: spooder/odom
       robot_base_frame: spooder/base_footprint
@@ -208,53 +189,12 @@ local_costmap:
       resolution: 0.05
       robot_radius: 0.08
       footprint: "[ [0.09, 0.07], [0.09, -0.07], [-0.09, -0.07], [-0.09, 0.07] ]"
-      plugins: ["obstacle_layer", "inflation_layer"]
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: scan
-        scan:
-          topic: /scan
-          max_obstacle_height: 0.6
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          min_obstacle_height: 0.05
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
+      plugins: ["inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
         inflation_radius: 0.15
       always_send_full_costmap: True
-
-collision_monitor:
-  ros__parameters:
-    use_sim_time: True
-    base_frame_id: "spooder/base_footprint"
-    odom_frame_id: "spooder/odom"
-    cmd_vel_in_topic: "cmd_vel_smoothed"
-    cmd_vel_out_topic: "cmd_vel"
-    state_topic: "collision_monitor_state"
-    transform_tolerance: 0.1
-    source_timeout: 0.5
-    stop_pub_timeout: 2.0
-    base_shift_correction: True
-    observation_sources: ["scan"]
-    polygons: ["Footprint"]
-    Footprint:
-      type: "polygon"
-      prediction_type: "none"
-      points: "[[0.09, 0.07], [0.09, -0.07], [-0.09, -0.07], [-0.09, 0.07]]"
-      action_type: "slowdown"
-      slowdown_ratio: 0.5
-      min_height: 0.0
-      max_height: 0.6
-    scan:
-      type: "scan"
-      topic: "/scan"
 
 velocity_smoother:
   ros__parameters:
@@ -263,10 +203,10 @@ velocity_smoother:
     stamp_smoothed_velocity_with_smoothing_time: False
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.12, 0.05, 0.6]
-    min_velocity: [-0.04, -0.05, -0.6]
-    max_accel: [0.3, 0.0, 0.8]
-    max_decel: [-0.3, 0.0, -0.8]
+    max_velocity: [0.22, 0.08, 0.8]
+    min_velocity: [-0.06, -0.08, -0.8]
+    max_accel: [0.5, 0.0, 1.2]
+    max_decel: [-0.5, 0.0, -1.2]
     odom_topic: "/odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
@@ -325,3 +265,37 @@ docking_server:
       projection_time: 5.0
       simulation_step: 0.1
       dock_collision_threshold: 0.3
+
+collision_monitor:
+  ros__parameters:
+    base_frame_id: "spooder/base_footprint"
+    odom_frame_id: "spooder/odom"
+    cmd_vel_in_topic: "cmd_vel_smoothed"
+    cmd_vel_out_topic: "cmd_vel"
+    transform_tolerance: 2.0
+    source_timeout: 1.0
+    base_shift_correction: True
+    stop_pub_timeout: 2.0
+    # LIDAR-free: the robot has no scan/pointcloud sensors. A single scan
+    # source is declared (pointing at the nonexistent /scan topic) so the node
+    # has a valid non-empty parameter set and configures cleanly; nothing
+    # publishes to it, so it never triggers a stop. The footprint approach
+    # polygon uses the local costmap footprint. Nav2 bringup can then proceed;
+    # navigation is open-loop over OctoMap-derived static terrain.
+    polygons: ["FootprintApproach"]
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 1.2
+      simulation_time_step: 0.1
+      min_points: 6
+      visualize: False
+      enabled: False
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "scan"
+      min_height: 0.15
+      max_height: 2.0
+      enabled: False

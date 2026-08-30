@@ -96,7 +96,7 @@ class FootholdPlannerNode(Node):
         p = msg.pose.pose.position
         q = msg.pose.pose.orientation
         yaw = 2 * np.arctan2(q.z, q.w)
-        self.body_pose = np.array([p.x, p.y, p.z, yaw])
+        self.body_pose = np.array([p.x, p.y, 0.154, yaw])
 
     def phase_callback(self, msg: UInt8MultiArray):
         """Receive leg phase from gait controller. Detect transitions."""
@@ -149,9 +149,12 @@ class FootholdPlannerNode(Node):
         cy   = meta.pose.position.y
         n    = self.costmap.shape[0]
 
-        # Build world-frame positions for all grid cells
-        xs = cx - meta.length_x/2 + (np.arange(n) + 0.5) * res
-        ys = cy - meta.length_y/2 + (np.arange(n) + 0.5) * res
+        # GridMap convention: index 0 = positive corner (getPositionFromIndex
+        # uses -index transform), so xs[0] must be the positive end.
+        half_x = meta.length_x / 2
+        half_y = meta.length_y / 2
+        xs = cx + half_x - (np.arange(n) + 0.5) * res
+        ys = cy + half_y - (np.arange(n) + 0.5) * res
         xx, yy = np.meshgrid(xs, ys, indexing='ij')
 
         # Read floor heights from terrain grid_map if available
@@ -163,20 +166,49 @@ class FootholdPlannerNode(Node):
 
         candidates = np.stack([xx.flatten(), yy.flatten(), zz.flatten()], axis=1)
 
+        cost_flat = self.costmap.flatten()
+        n_total = len(cost_flat)
+        n_finite_cost = int(np.sum(np.isfinite(cost_flat)))
+        n_nan_floor = int(np.sum(np.isnan(self.costmap)))
+
         # Mask to reachable cells
         reachable = kin.get_reachable_zone(leg_idx, self.body_pose, candidates)
 
-        # AEP/PEP workspace restriction: transform each candidate to coxa frame
-        # and reject if forward distance is outside [PEP, AEP] range
+        # AEP/PEP workspace restriction
         aep_mask = self._aep_pep_filter(candidates, leg_idx)
-        reachable &= aep_mask
 
-        cost_flat = self.costmap.flatten()
-        cost_flat[~reachable] = np.inf
+        reachable_and_aep = reachable & aep_mask
+        n_pass = int(np.sum(reachable_and_aep))
+
+        cost_flat[~reachable_and_aep] = np.inf
 
         best_idx = np.argmin(cost_flat)
         if cost_flat[best_idx] == np.inf:
-            self.get_logger().warn(f'Leg {leg_idx}: no valid foothold found')
+            fallback = self._default_stance_world(leg_idx)
+            if fallback is not None:
+                pt = PointStamped()
+                pt.header.stamp = self.get_clock().now().to_msg()
+                pt.header.frame_id = 'map'
+                pt.point.x = float(fallback[0])
+                pt.point.y = float(fallback[1])
+                pt.point.z = float(fallback[2])
+                self._target_points[leg_idx] = pt.point
+                self._target_is_replan[leg_idx] = replan
+                pub = self.replan_pubs[leg_idx] if replan else self.target_pubs[leg_idx]
+                pub.publish(pt)
+                self._publish_markers()
+                self.get_logger().warn(
+                    f'Leg {leg_idx}: no valid foothold, using default stance fallback | '
+                    f'costmap: {n_finite_cost}/{n_total} finite, '
+                    f'reachable+aep: {n_pass}/{n_total}')
+            else:
+                self.get_logger().warn(
+                    f'Leg {leg_idx}: no valid foothold, no fallback | '
+                    f'costmap: {n_finite_cost}/{n_total} finite, '
+                    f'reachable+aep: {n_pass}/{n_total}, '
+                    f'body_z={self.body_pose[2]:.3f}, '
+                    f'costmap_origin=({cx:.2f},{cy:.2f}), '
+                    f'robot=({self.body_pose[0]:.2f},{self.body_pose[1]:.2f})')
             return
 
         best_ix = best_idx // n
@@ -201,12 +233,11 @@ class FootholdPlannerNode(Node):
         self._publish_markers()
 
     def _publish_markers(self):
-        """RViz MarkerArray: spheres at foothold targets + lines from body."""
+        """RViz MarkerArray: swing trajectory arcs, landing zones, current foot + target spheres."""
         ma = MarkerArray()
         stamp = self.get_clock().now().to_msg()
         bx, by, bz, _ = self.body_pose
 
-        # Delete-all first so stale markers disappear when targets clear
         clear = Marker()
         clear.header.frame_id = 'map'
         clear.header.stamp = stamp
@@ -215,63 +246,147 @@ class FootholdPlannerNode(Node):
         clear.action = Marker.DELETEALL
         ma.markers.append(clear)
 
+        swing_height = 0.06
+
         for i in range(NUM_LEGS):
             pt = self._target_points[i]
             if pt is None:
                 continue
             r, g, b, a = LEG_COLORS[i]
-            # Mid-swing replan → white ring cue via higher scale / brighter
-            scale = 0.035 if self._target_is_replan[i] else 0.025
+            is_replan = self._target_is_replan[i]
 
+            stance = self._default_stance_world(i)
+            if stance is None:
+                stance = np.array([bx, by, bz - 0.12])
+
+            # --- Current foot position (small dim sphere) ---
+            cur = Marker()
+            cur.header.frame_id = 'map'
+            cur.header.stamp = stamp
+            cur.ns = 'current_feet'
+            cur.id = i
+            cur.type = Marker.SPHERE
+            cur.action = Marker.ADD
+            cur.pose.position.x = float(stance[0])
+            cur.pose.position.y = float(stance[1])
+            cur.pose.position.z = float(stance[2])
+            cur.pose.orientation.w = 1.0
+            cur.scale.x = cur.scale.y = cur.scale.z = 0.018
+            cur.color = ColorRGBA(r=r, g=g, b=b, a=0.35)
+            ma.markers.append(cur)
+
+            # --- Target sphere (larger, bright) ---
             sphere = Marker()
             sphere.header.frame_id = 'map'
             sphere.header.stamp = stamp
-            sphere.ns = 'footholds'
-            sphere.id = i + 1
+            sphere.ns = 'foothold_targets'
+            sphere.id = i
             sphere.type = Marker.SPHERE
             sphere.action = Marker.ADD
             sphere.pose.position.x = pt.x
             sphere.pose.position.y = pt.y
             sphere.pose.position.z = pt.z
             sphere.pose.orientation.w = 1.0
-            sphere.scale.x = sphere.scale.y = sphere.scale.z = scale
-            sphere.color = ColorRGBA(r=r, g=g, b=b, a=a)
-            sphere.lifetime.sec = 0
+            s = 0.040 if is_replan else 0.028
+            sphere.scale.x = sphere.scale.y = sphere.scale.z = s
+            sphere.color = ColorRGBA(r=r, g=g, b=b, a=0.9)
             ma.markers.append(sphere)
 
-            line = Marker()
-            line.header.frame_id = 'map'
-            line.header.stamp = stamp
-            line.ns = 'foothold_rays'
-            line.id = i + 1
-            line.type = Marker.LINE_LIST
-            line.action = Marker.ADD
-            line.scale.x = 0.008
-            line.color = ColorRGBA(r=r, g=g, b=b, a=0.6)
-            line.points = [
-                Point(x=bx, y=by, z=bz),
-                Point(x=pt.x, y=pt.y, z=pt.z),
-            ]
-            ma.markers.append(line)
+            # --- Landing zone disc (flat ring on ground) ---
+            disc = Marker()
+            disc.header.frame_id = 'map'
+            disc.header.stamp = stamp
+            disc.ns = 'landing_zones'
+            disc.id = i
+            disc.type = Marker.CYLINDER
+            disc.action = Marker.ADD
+            disc.pose.position.x = pt.x
+            disc.pose.position.y = pt.y
+            disc.pose.position.z = pt.z - 0.003
+            disc.pose.orientation.w = 1.0
+            disc.scale.x = disc.scale.y = 0.06
+            disc.scale.z = 0.003
+            disc.color = ColorRGBA(r=r, g=g, b=b, a=0.25)
+            ma.markers.append(disc)
 
+            # --- Swing trajectory arc (cubic Bezier from current to target) ---
+            arc = Marker()
+            arc.header.frame_id = 'map'
+            arc.header.stamp = stamp
+            arc.ns = 'swing_arcs'
+            arc.id = i
+            arc.type = Marker.LINE_STRIP
+            arc.action = Marker.ADD
+            arc.scale.x = 0.005
+            arc.color = ColorRGBA(r=r, g=g, b=b, a=0.55 if not is_replan else 0.75)
+
+            p0 = stance
+            p3 = np.array([pt.x, pt.y, pt.z])
+            p1 = p0 + np.array([0.0, 0.0, swing_height])
+            p2 = p3 + np.array([0.0, 0.0, swing_height])
+
+            n_arc = 16
+            for j in range(n_arc + 1):
+                t = j / n_arc
+                t1 = 1.0 - t
+                x = t1**3 * p0[0] + 3 * t1**2 * t * p1[0] + 3 * t1 * t**2 * p2[0] + t**3 * p3[0]
+                y = t1**3 * p0[1] + 3 * t1**2 * t * p1[1] + 3 * t1 * t**2 * p2[1] + t**3 * p3[1]
+                z = t1**3 * p0[2] + 3 * t1**2 * t * p1[2] + 3 * t1 * t**2 * p2[2] + t**3 * p3[2]
+                arc.points.append(Point(x=float(x), y=float(y), z=float(z)))
+            ma.markers.append(arc)
+
+            # --- Vertical drop line from arc peak to ground ---
+            peak_t = 0.5
+            t1 = 0.5
+            peak_x = t1**3 * p0[0] + 3 * t1**2 * 0.5 * p1[0] + 3 * t1 * 0.25 * p2[0] + 0.125 * p3[0]
+            peak_y = t1**3 * p0[1] + 3 * t1**2 * 0.5 * p1[1] + 3 * t1 * 0.25 * p2[1] + 0.125 * p3[1]
+            peak_z = t1**3 * p0[2] + 3 * t1**2 * 0.5 * p1[2] + 3 * t1 * 0.25 * p2[2] + 0.125 * p3[2]
+
+            drop = Marker()
+            drop.header.frame_id = 'map'
+            drop.header.stamp = stamp
+            drop.ns = 'swing_peaks'
+            drop.id = i
+            drop.type = Marker.SPHERE
+            drop.action = Marker.ADD
+            drop.pose.position.x = float(peak_x)
+            drop.pose.position.y = float(peak_y)
+            drop.pose.position.z = float(peak_z)
+            drop.pose.orientation.w = 1.0
+            drop.scale.x = drop.scale.y = drop.scale.z = 0.012
+            drop.color = ColorRGBA(r=min(r + 0.3, 1.0), g=min(g + 0.3, 1.0),
+                                   b=min(b + 0.3, 1.0), a=0.7)
+            ma.markers.append(drop)
+
+            # --- Text label ---
             text = Marker()
             text.header.frame_id = 'map'
             text.header.stamp = stamp
             text.ns = 'foothold_labels'
-            text.id = i + 1
+            text.id = i
             text.type = Marker.TEXT_VIEW_FACING
             text.action = Marker.ADD
             text.pose.position.x = pt.x
             text.pose.position.y = pt.y
-            text.pose.position.z = pt.z + 0.04
+            text.pose.position.z = pt.z + 0.05
             text.pose.orientation.w = 1.0
-            text.scale.z = 0.03
+            text.scale.z = 0.025
             text.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.9)
-            tag = 'REPLAN' if self._target_is_replan[i] else 'TGT'
+            tag = 'RPLN' if is_replan else 'TGT'
             text.text = f'{LEG_NAMES[i]} {tag}'
             ma.markers.append(text)
 
         self.marker_pub.publish(ma)
+
+    def _default_stance_world(self, leg_idx: int):
+        """Return the default standing position for this leg in world frame."""
+        stance_x = 0.12
+        stance_z = -0.11
+        default_coxa = np.array([stance_x, 0.0, stance_z])
+        try:
+            return kin.coxa_to_world(default_coxa, leg_idx, self.body_pose)
+        except Exception:
+            return None
 
     def _aep_pep_filter(self, candidates: np.ndarray, leg_idx: int) -> np.ndarray:
         """
@@ -281,39 +396,28 @@ class FootholdPlannerNode(Node):
         PEP (Posterior Extreme Position): backward limit of step workspace
         Candidates must have their coxa-frame x-coordinate between PEP and AEP.
         """
-        mask = np.ones(len(candidates), dtype=bool)
         bx, by, bz, byaw = self.body_pose
+        origin = kin.LEG_ORIGINS[leg_idx]
+        angle = kin.LEG_ANGLES[leg_idx]
 
         cos_y = np.cos(-byaw)
         sin_y = np.sin(-byaw)
-        origin = kin.LEG_ORIGINS[leg_idx]
-        angle = kin.LEG_ANGLES[leg_idx]
         cos_a = np.cos(-angle)
         sin_a = np.sin(-angle)
 
-        for i, wp in enumerate(candidates):
-            # World → body frame
-            dx = wp[0] - bx
-            dy = wp[1] - by
-            body_x = dx * cos_y - dy * sin_y
-            body_y = dx * sin_y + dy * cos_y
-            body_z = wp[2]
+        dx = candidates[:, 0] - bx
+        dy = candidates[:, 1] - by
+        body_x = dx * cos_y - dy * sin_y
+        body_y = dx * sin_y + dy * cos_y
 
-            # Body → leg frame
-            tx = body_x - origin[0]
-            ty = body_y - origin[1]
-            tz = body_z - origin[2]
-            coxa_x = tx * cos_a - ty * sin_a
+        tx = body_x - origin[0]
+        ty = body_y - origin[1]
+        coxa_x = tx * cos_a - ty * sin_a
 
-            # coxa_x is forward distance in leg frame
-            # PEP: minimum forward distance, AEP: maximum forward distance
-            pep_limit = kin.COXA_LEN + self.pep_offset
-            aep_limit = kin.COXA_LEN + kin.FEMUR_LEN + kin.TIBIA_LEN - self.aep_offset
+        pep_limit = kin.COXA_LEN + self.pep_offset
+        aep_limit = kin.COXA_LEN + kin.FEMUR_LEN + kin.TIBIA_LEN - self.aep_offset
 
-            if coxa_x < pep_limit or coxa_x > aep_limit:
-                mask[i] = False
-
-        return mask
+        return (coxa_x >= pep_limit) & (coxa_x <= aep_limit)
 
     def _get_cost_at_cell(self, ix: int, iy: int) -> float:
         if self.costmap is None:
