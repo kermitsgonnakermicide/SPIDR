@@ -2,7 +2,7 @@
 kinematics.py
 
 3-DOF inverse kinematics for hexapod legs.
-All dimensions match the Diddler URDF exactly.
+All dimensions match the spooder URDF exactly. See spooder.xacro /urdf.
 
 Two IK interfaces:
   - ik_coxa(x, y, z): coxa-frame IK (matches ik_solver.py, used by gait controller)
@@ -10,12 +10,22 @@ Two IK interfaces:
 
 Leg frame: X = forward along coxa, Z = up
 Joint order: coxa (yaw), femur (pitch), tibia (pitch)
+
+Reachable workspace at the default foot height (z=-0.140) is a horizontal-X
+annulus around the femur joint (which sits at coxa_x=0.043):
+    inner radius abs(FEMUR - TIBIA) = 0.044
+    outer radius FEMUR + TIBIA    = 0.164
+After subtracting COXA_LEN from horizontal: foot can sit at coxa_x in roughly
+[-0.001, 0.207] (when z = 0).  At z = -0.140 max forward step is x ~ 0.128 and
+max backward is x ~ -0.042 — see gait_controller_node docstring.
+
+base_clearance (URDF base_joint z) MUST stay below FEMUR+TIBIA=0.164.
 """
 
 import math
 import numpy as np
 
-# Diddler link lengths (from URDF)
+# Link lengths (from spooder/xacro)
 COXA_LEN = 0.043
 FEMUR_LEN = 0.060
 TIBIA_LEN = 0.104
@@ -24,6 +34,12 @@ TIBIA_LEN = 0.104
 COXA_LIMITS = (-0.7, 0.7)
 FEMUR_LIMITS = (-1.5, 1.5)
 TIBIA_LIMITS = (-2.5, 0.5)
+
+# Nominal base_clearance (URDF base_joint z — base_link above base_footprint).
+# Older value 0.154 put the default foot 12mm outside leg reach; everything
+# IK'd to (0,0,0) and the body pancakes. See spooder.xacro base_joint comment
+# and gait_controller_node for the full history.
+BASE_CLEARANCE = 0.135
 
 # Leg mount positions relative to base_link center (x, y, z)
 # From URDF xacro leg instantiations
@@ -81,16 +97,26 @@ def ik_coxa(x, y, z):
     Args:
         x, y, z: foot position in the coxa frame (m)
     Returns:
-        (q_coxa, q_femur, q_tibia) or (0, 0, 0) if unreachable
+        (q_coxa, q_femur, q_tibia). For unreachable targets we clamp to the
+        workspace boundary — historically this function returned (0, 0, 0),
+        which collapsed every leg to a horizontal stick and pancaked the body.
     """
+    if not is_reachable(x, y, z):
+        x, y, z = clamp_to_reach(x, y, z)
+
     q_coxa = math.atan2(y, x)
     if not (COXA_LIMITS[0] <= q_coxa <= COXA_LIMITS[1]):
-        return (0.0, 0.0, 0.0)
+        # Coxa limit is an unfixable limitation (rotational, not reach).
+        # Snap to the nearest limit so the joint command is at least legal.
+        q_coxa = max(COXA_LIMITS[0], min(COXA_LIMITS[1], q_coxa))
 
     horizontal_dist = math.sqrt(x**2 + y**2) - COXA_LEN
     result = _law_of_cosines_ik(horizontal_dist, z)
+    # After clamp_to_reach above, this branch should be unreachable.
     if result is None:
-        return (0.0, 0.0, 0.0)
+        # Last resort: command zero (leg straight horizontal). Preferable to
+        # building a None return that the caller might propagate as NaNs.
+        return (q_coxa, 0.0, 0.0)
 
     q_femur, q_tibia = result
     return (q_coxa, q_femur, q_tibia)
@@ -111,25 +137,55 @@ def is_reachable(x, y, z):
 
 def clamp_to_reach(x, y, z):
     """
-    Clamp a coxa-frame foot position to the nearest reachable point.
-    If already reachable, returns (x, y, z) unchanged.
-    Scales the XY offset from origin to fit within the IK workspace at height z.
+    Clamp a coxa-frame foot position to the nearest reachable point on the
+    workspace boundary. The workspace is an annulus around the femur joint
+    (sitting at coxa_x=COXA_LEN, y=0, z=0): inner r |FEMUR-TIBIA|=0.044,
+    outer r FEMUR+TIBIA=0.164, and the coxa-yaw limit (-0.7..+0.7 rad).
+
+    For a target outside the annulus or past the coxa-yaw limit, we project
+    it back to the closest orthogonal/distance constraint, prioritizing XY
+    radius limiting at the requested z.  When |z| itself exceeds FEMUR+TIBIA
+    we also pull z toward ±FEMUR+TIBIA (1% margin) so the IK never sees a
+    physically unreachable length.
     """
     if is_reachable(x, y, z):
+        # Coax-yaw is in-bounds at large XY too — atan2 maps fine.
         return x, y, z
 
-    r_xy = math.sqrt(x**2 + y**2)
-    if r_xy < 1e-6:
-        return x, y, z
+    max_L = FEMUR_LEN + TIBIA_LEN       # 0.164
+    min_L = abs(FEMUR_LEN - TIBIA_LEN)  # 0.044
 
-    # Max horizontal distance from coxa at height z
-    max_L = FEMUR_LEN + TIBIA_LEN
-    max_h = math.sqrt(max(max_L**2 - z**2, 0.0))
-    max_r_xy = max_h + COXA_LEN
+    # 1) If |z| > max_L, even a vertical leg can't reach. Clip z vertically.
+    if abs(z) >= max_L:
+        z = math.copysign(max_L * 0.99, z)
 
-    # Scale XY to fit
-    scale = max_r_xy / r_xy * 0.99
-    return x * scale, y * scale, z
+    # 2) Cap XY radius AND z so (x, y, z) sits on the outer annulus boundary.
+    #    femur-joint frame: target_femur = (x - COXA_LEN, y, z), with length L.
+    fx = x - COXA_LEN
+    L = math.sqrt(fx * fx + y * y + z * z)
+    if L > max_L:
+        s = max_L * 0.99 / L
+        fx *= s
+        y *= s
+        z *= s
+    elif L < min_L and L > 1e-6:
+        s = min_L * 1.01 / L
+        fx *= s
+        y *= s
+        z *= s
+    x = fx + COXA_LEN
+
+    # 3) Snap to coxa-yaw limit (project the polar angle to [-0.7, +0.7]).
+    polar = math.atan2(y, x)
+    coxa_limit = COXA_LIMITS[1]
+    if polar > coxa_limit:
+        r_xy = math.hypot(x, y)
+        x, y = r_xy * math.cos(coxa_limit), r_xy * math.sin(coxa_limit)
+    elif polar < -coxa_limit:
+        r_xy = math.hypot(x, y)
+        x, y = r_xy * math.cos(-coxa_limit), r_xy * math.sin(-coxa_limit)
+
+    return x, y, z
 
 
 def ik_leg(target_body, leg_index):

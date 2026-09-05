@@ -12,7 +12,10 @@ LEG_YAW = [-0.7853, -1.5708, -2.3561, 0.7853, 1.5708, 2.3561]
 TRIPOD_GROUPS = [0, 1, 0, 1, 0, 1]
 LEG_X_OFF = [0.0835, 0.0, -0.0835, 0.0835, 0.0, -0.0835]
 LEG_Y_OFF = [-0.063, -0.063, -0.063, 0.063, 0.063, 0.063]
-BASE_FOOTPRINT_TO_BASE_LINK_Z = 0.154
+# Match spooder.xacro base_joint z; old 0.154 made default foot (0.12, 0, -0.158)
+# unreachable by 12mm — every IK returned (0,0,0) and the body pancakes. See
+# kinematics.py and feedback-hexapod-rest-pose memory for the math.
+BASE_FOOTPRINT_TO_BASE_LINK_Z = 0.135
 CMD_VEL_TIMEOUT = 0.5
 
 
@@ -23,7 +26,17 @@ class GaitController(Node):
         self.declare_parameter('stride_amp', 0.3)
         self.declare_parameter('gait_speed', 6.0)
         self.declare_parameter('timer_period', 0.05)
-        self.declare_parameter('default_z', -0.12)
+        # default_z is the foot tip Z in the coxa (base_link) frame. Coords are
+        # coxa-origin-relative; +Z up. Coxa joints at z=0 in base_link, and
+        # base_link sits z=BASE_FOOTPRINT_TO_BASE_LINK_Z(=0.135, see top) above
+        # base_footprint (ground). For the foot to TOUCH GROUND, foot_world_z=0,
+        # so foot_coxa_z = -0.135 — but the leg can't reach (0.12, 0, -0.135),
+        # so we keep foot_x at ~0.085 (leg forward reach) and foot_z=-0.140
+        # (5mm compression below floor for stable single-point contact).
+        # Math: dist from femur joint = sqrt((0.085-0.043)^2 + 0.140^2) = 0.146
+        # vs FEMUR+TIBIA=0.164 — 18mm reach headroom for step swing.
+        # See kinematics.py and memory [[feedback-hexapod-rest-pose]].
+        self.declare_parameter('default_z', -0.140)
         self.declare_parameter('base_step_height', 0.05)
 
         self.publisher_ = self.create_publisher(Float64MultiArray, '/spooder_controller/commands', 10)

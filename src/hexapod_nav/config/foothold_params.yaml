@@ -11,7 +11,10 @@ terrain_cost_node:
 foothold_planner_node:
   ros__parameters:
     replan_cost_threshold: 0.5
-    nominal_stance_height: -0.12
+    # matches gait_controller_node Python default; foot Z in coxa frame.
+    # body_clearance is now 0.135 (spooder.xacro base_joint) — see kinematics.py.
+    # -0.140 = -body_clearance - 0.005 ground_compression for stable contact.
+    nominal_stance_height: -0.140
     aep_forward_offset: 0.15
     pep_backward_offset: 0.15
 
@@ -20,5 +23,9 @@ gait_controller_node:
     swing_duration: 0.5
     max_swing_height: 0.06
     step_frequency: 20.0
-    nominal_stance_height: -0.12
-    nominal_stance_forward: 0.12
+    # matches gait_controller_node Python default; foot Z in coxa frame.
+    # -0.140 = -body_clearance(0.135) - 0.005 ground_compression for stable contact.
+    # See gait_controller_node.py and memory [[feedback-hexapod-rest-pose]] for
+    # the rationale; the previous value -0.158 was unreachable for this leg geometry.
+    nominal_stance_height: -0.140
+    nominal_stance_forward: 0.085

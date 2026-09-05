@@ -62,8 +62,19 @@ class GaitControllerNode(Node):
         self.declare_parameter('swing_duration', 0.5)
         self.declare_parameter('max_swing_height', 0.06)
         self.declare_parameter('step_frequency', 20.0)
-        self.declare_parameter('nominal_stance_height', -0.12)
-        self.declare_parameter('nominal_stance_forward', 0.12)
+        # nominal_stance_height is the foot Z in coxa-frame. Coords are coxa-local
+        # (origin = coxa joint, +Z up). The coxa joints sit at z=0 in base_link and
+        # base_link sits z=BASE_HEIGHT (0.135m, set by spooder.xacro base_joint)
+        # above base_footprint (ground proxy). For the foot tip to TOUCH GROUND at
+        # rest, foot_world_z must be 0, so foot_coxa_z = -BASE_HEIGHT. We use -0.140
+        # so the simulated feet compress ~5 mm into the floor for stable single-point
+        # contact. (Previous default -0.158 had body_clearance=0.154, which placed
+        # the default foot (0.12, 0, -0.158) outside leg reach (FEMUR+TIBIA=0.164) and
+        # made every IK call return (0,0,0), collapsing the gait.)
+        # Reachable check at (0.085, 0, -0.140): distance from femur joint =
+        # sqrt(0.042^2 + 0.140^2) = 0.146 — 18mm inside the 0.164 reach limit.
+        self.declare_parameter('nominal_stance_height', -0.140)
+        self.declare_parameter('nominal_stance_forward', 0.085)
 
         self.swing_dur = self.get_parameter('swing_duration').value
         self.max_height = self.get_parameter('max_swing_height').value
@@ -91,7 +102,9 @@ class GaitControllerNode(Node):
         self.recovery_mode = False
         self.recovery_scale = 1.0
 
-        self.create_subscription(Twist, '/cmd_vel_nav', self.cmd_vel_callback, 10)
+        # Nav2 collision_monitor outputs /cmd_vel; this is what the rest of the chain (legacy
+        # controller, unstuck_monitor, hexapod_nav_cpp, rerun_bridge) subscribes to.
+        self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.create_subscription(GridMap, '/terrain_grid_map', self.terrain_callback, 10)
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
 

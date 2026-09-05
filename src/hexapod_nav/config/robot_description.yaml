@@ -9,18 +9,22 @@ robot_description:
     body_length: 0.167       # front-to-back distance between leg mounts
     body_width: 0.126        # side-to-side distance between leg mounts
     body_height: 0.05        # body shell height
-    body_clearance: 0.154    # base_footprint to base_link Z offset
+    # base_footprint to base_link Z offset. Must be <= FEMUR+TIBIA - step_room so
+    # the leg can reach the floor at nominal stance. 0.135 leaves 18mm margin at
+    # default foot pose (0.085, 0, -0.140); see spooder.xacro base_joint comment.
+    body_clearance: 0.135
 
     # Leg kinematics (must match kinematics.py)
     coxa_length: 0.043
     femur_length: 0.060
     tibia_length: 0.104
 
-    # Gait parameters
-    nominal_stance_forward: 0.10   # default foot x in coxa frame (m)
-    nominal_stance_height: -0.12   # default foot z in coxa frame (m)
-    max_step_reach: 0.18           # maximum leg reach from origin (m)
-    min_step_reach: 0.04           # minimum leg reach from origin (m)
+    # Gait parameters (defaults match gait_controller_node and kinematics)
+    nominal_stance_forward: 0.085   # default foot x in coxa frame (m)
+    # -0.140 = -body_clearance(0.135) - 0.005 ground_compression for stable contact.
+    nominal_stance_height: -0.140   # default foot z in coxa frame (m)
+    max_step_reach: 0.16            # maximum leg reach from origin (m), < FEMUR+TIBIA
+    min_step_reach: 0.04            # minimum leg reach from origin (m)
 
     # Safety limits
     max_body_tilt_deg: 15.0        # max roll/pitch before abort

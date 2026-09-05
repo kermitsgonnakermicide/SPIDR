@@ -10,10 +10,10 @@
   <xacro:property name="femur_length" value="0.060"/>
   <xacro:property name="tibia_length" value="0.104"/>
 
-  <!-- Include Camera -->
-  <xacro:include filename="$(find spooder_description)/urdf/camera.xacro"/>
-  
-  <!-- Include LiDAR -->
+  <!-- Include OAK-D Lite Camera (Gazebo simulation plugin) -->
+  <xacro:include filename="$(find spooder_description)/urdf/gazebo_oakd.plugin.xacro"/>
+
+  <!-- Include LiDAR (kept for backward compatibility) -->
   <xacro:include filename="$(find spooder_description)/urdf/lidar.xacro"/>
 
   <!-- Include IMU -->
@@ -49,7 +49,12 @@
   <joint name="base_joint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 ${tibia_length + 0.05}" rpy="0 0 0"/> 
+    <!-- base_link Z above base_footprint. Must be <= FEMUR+TIBIA(0.164) - step_room so
+         the leg can reach the floor at the nominal stance.  Previous value
+         (tibia_length + 0.05 = 0.154) was 19mm too high: default foot
+         (0.12, 0, -0.158) sat 12mm OUTSIDE leg reach, every IK returned (0,0,0),
+         and the body pancakes.  0.135m leaves 18mm margin at (0.085, 0, -0.140). -->
+    <origin xyz="0 0 0.135" rpy="0 0 0"/> 
   </joint>
 
   <!-- Leg Macro -->
@@ -162,8 +167,9 @@
       <!-- Contact Surface for Tibia tip -->
       <gazebo reference="${prefix}_tibia_link">
         <self_collide>false</self_collide>
-        <mu1>1.0</mu1>
-        <mu2>1.0</mu2>
+        <mu1>2.5</mu1>
+        <mu2>2.5</mu2>
+        <min_depth>0.001</min_depth>
         <kp>100000.0</kp>
         <kd>10.0</kd>
       </gazebo>
@@ -181,8 +187,17 @@
   <xacro:leg prefix="lm" side_sign="1"  x_offset="0.0" y_offset="0.063"  yaw="1.5708"/>
   <xacro:leg prefix="lr" side_sign="1"  x_offset="-0.0835" y_offset="0.063"  yaw="2.3561"/>
 
-  <!-- Depth Camera -->
-  <xacro:depth_camera parent_link="base_link" origin_xyz="0.095 0 0.15" origin_rpy="0 0 0"/>
+  <!-- OAK-D Lite Depth Camera (replaces generic depth_camera).
+       Mount position: 9.5 cm forward of base_link, 8 cm up. The downward
+       tilt (~20 deg) is set inside the sensor's own <pose> tag so the caller
+       can keep origin_rpy="0 0 0" without double-counting rotations.
+       At 21.5 cm total height (13.5 cm of base_joint + 8 cm mount) and -20 deg
+       pitch, the camera's near clip (0.2 m) hits floor ~0.7 m in front of
+       robot, and the FOV captures the floor up to ~5 m + the horizon. -->
+  <xacro:gazebo_oakd_sensor parent_link="base_link" origin_xyz="0.095 0 0.08" origin_rpy="0 0 0"/>
+
+  <!-- LiDAR Sensor (kept for backward compatibility) -->
+  <xacro:lidar_sensor parent="base_link"/>
 
   <!-- ros2_control -->
   <ros2_control name="SpooderSystem" type="system">

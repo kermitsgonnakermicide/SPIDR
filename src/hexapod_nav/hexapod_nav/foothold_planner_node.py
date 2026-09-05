@@ -48,7 +48,11 @@ class FootholdPlannerNode(Node):
 
         # Parameters
         self.declare_parameter('replan_cost_threshold', 0.3)  # Cost delta to trigger replan
-        self.declare_parameter('nominal_stance_height', -0.12)  # z of foot in body frame (m)
+        # nominal_stance_height is foot Z in coxa frame. -0.140 = -(body_clearance 0.135) - 0.005 ground_compression.
+        # Matches gait_controller_node Python default and hexapod_nav/config/foothold_params.yaml.
+        # (Previous -0.158 was unreachable for FEMUR+TIBIA=0.164 at default_x=0.12 and
+        # caused the gait to collapse. See kinematics.py and feedback-hexapod-rest-pose memory.)
+        self.declare_parameter('nominal_stance_height', -0.140)
         self.declare_parameter('aep_forward_offset', 0.05)   # Anterior Extreme Position offset (m)
         self.declare_parameter('pep_backward_offset', 0.05)  # Posterior Extreme Position offset (m)
 
@@ -63,7 +67,7 @@ class FootholdPlannerNode(Node):
         self.costmap = None
         self.costmap_meta = None
         self.terrain_grid = None
-        self.body_pose = np.array([0.0, 0.0, 0.12, 0.0])  # x, y, z, yaw
+        self.body_pose = np.array([0.0, 0.0, 0.135, 0.0])  # x, y, z, yaw (body_link starts at z=0.135 above base_footprint)
 
         # Publishers — one per leg
         self.target_pubs = [
