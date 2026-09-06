@@ -1,0 +1,51 @@
+# Tripod gait parameters for spooder_robot/gait_node.
+#
+# Foot positions are in the leg's coxa frame: x = forward along coxa,
+# z = up. URDF joint "0 rad" maps to the IK result, which is then
+# shifted by the per-joint ``offset_rad`` from ``robot_calibration.yaml``
+# before being sent to the ST3215 bus.
+#
+# Physical-robot constraint: the femur + tibia = 0.145 m, so any foot
+# target below ~ -0.13 m horizontal-extended is out of reach. The sim's
+# nominal_stance_height of -0.158 only worked because the simulator's
+# IK silently falls back to (0, 0, 0). For the real robot, use -0.10 z
+# with default_foot_forward=0.10 (L=0.116, comfortably reachable).
+# If you bump up body height (e.g. base_link_z > 0.20), re-tune both
+# numbers so the L stays under 0.140 m.
+
+spooder_robot:
+  ros__parameters:
+    # -- IK geometry (user-measured physical servo lengths) --
+    coxa_length: 0.0416
+    femur_length: 0.053
+    tibia_length: 0.0920
+
+    # -- Standing pose (coxa frame, m) --
+    default_foot_forward: 0.10
+    default_foot_z: -0.10
+
+    # -- Tripod walk --
+    cycle_period_s: 1.6          # full A/B cycle. Larger = slower
+    swing_duration_s: 0.5        # how long a leg is in the air
+    step_height_m: 0.05          # peak foot rise during swing
+    max_step_length_m: 0.10     # commanded-stride cap (each side)
+    max_yaw_rate_rad_s: 0.6
+    cmd_vel_timeout_s: 0.6       # if /cmd_vel goes stale longer than
+                                 # this, gait eases to a stop and
+                                 # parks at the standing pose.
+
+    # -- IMU body leveling --
+    # Each leg's femur gets a small additive trim proportional to
+    # roll/pitch, so the body stays closer to level while walking.
+    # The gain is dimensionless (rad-of-femur-trim per rad-of-tilt).
+    # The Tk control app's "3 steps / degree" is roughly 0.27 in these
+    # units; 0.1 is a conservative starting point.
+    imu_roll_gain:  0.1
+    imu_pitch_gain: 0.1
+    imu_max_trim_rad: 0.20
+    imu_flip_roll:  false
+    imu_flip_pitch: false
+
+    # -- Publisher rates --
+    control_rate_hz: 30.0        # main gait loop
+    phase_publish_rate_hz: 10.0

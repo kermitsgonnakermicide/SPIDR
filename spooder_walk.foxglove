@@ -1,0 +1,158 @@
+{
+  "configVersion": "1",
+  "panels": [
+    {
+      "id": "3d-main",
+      "panelConfig": {
+        "type": "3DPanel",
+        "title": "3D View (Robot + World)",
+        "settings": {
+          "checkedLayers": {
+            "Visible": true,
+            "Grid": true,
+            "Tf": true,
+            "Robot": true
+          },
+          "expandedLayers": {},
+          "followCamera": false,
+          "cameraState": {
+            "distance": 6.0,
+            "perspective": true,
+            "phi": 0.6,
+            "thetaOffset": 1.57,
+            "targetOffset": [0, 0, 0],
+            "target": [0.5, 0, 0.5]
+          },
+          "sceneRenderable": true
+        }
+      }
+    },
+    {
+      "id": "image-oak",
+      "panelConfig": {
+        "type": "Image",
+        "title": "OAK-D Camera (RGB)",
+        "settings": {
+          "checkedTopic": "/oak_d/rgb/image",
+          "compression": "none",
+          "showCrosshair": false,
+          "scale": 1.0
+        }
+      }
+    },
+    {
+      "id": "image-depth",
+      "panelConfig": {
+        "type": "Image",
+        "title": "OAK-D Depth",
+        "settings": {
+          "checkedTopic": "/oak_d/depth/image",
+          "compression": "none",
+          "showCrosshair": false,
+          "scale": 1.0
+        }
+      }
+    },
+    {
+      "id": "map-nav2",
+      "panelConfig": {
+        "type": "Map",
+        "title": "Nav2 Map (Costmaps + Path + Pose)",
+        "settings": {
+          "checkedTopics": {
+            "/global_costmap/costmap": true,
+            "/local_costmap/costmap": true,
+            "/plan": true,
+            "/spooder/odom": true,
+            "/octomap_binary": true
+          },
+          "colorMode": "Map",
+          "followMode": "Map",
+          "showCrosshair": false
+        }
+      }
+    },
+    {
+      "id": "topic-tree",
+      "panelConfig": {
+        "type": "TopicTree",
+        "title": "Topic Tree",
+        "settings": {}
+      }
+    },
+    {
+      "id": "plot-cmd",
+      "panelConfig": {
+        "type": "Plot",
+        "title": "Cmd Velocity + Odom",
+        "settings": {
+          "checkedPaths": {
+            "/cmd_vel.linear.x": true,
+            "/cmd_vel.linear.y": true,
+            "/cmd_vel.angular.z": true,
+            "/odom.twist.twist.linear.x": true
+          },
+          "defaultPlotConfig": {
+            "isSynced": true,
+            "xAxisLabel": "Time"
+          }
+        }
+      }
+    },
+    {
+      "id": "plot-state",
+      "panelConfig": {
+        "type": "Plot",
+        "title": "/joint_states (Leg Angles)",
+        "settings": {
+          "checkedPaths": {
+            "/joint_states.position[0]": true,
+            "/joint_states.position[3]": true,
+            "/joint_states.position[6]": true,
+            "/joint_states.position[9]": true,
+            "/joint_states.position[12]": true,
+            "/joint_states.position[15]": true
+          },
+          "defaultPlotConfig": {
+            "isSynced": false
+          }
+        }
+      }
+    }
+  ],
+  "panelLayout": {
+    "first": {
+      "type": "column",
+      "ratio": 0.5,
+      "first": {
+        "type": "row",
+        "ratio": 0.6,
+        "first": "3d-main",
+        "second": {
+          "type": "column",
+          "ratio": 0.5,
+          "first": "image-oak",
+          "second": "image-depth"
+        }
+      },
+      "second": {
+        "type": "row",
+        "ratio": 0.5,
+        "first": "map-nav2",
+        "second": "topic-tree"
+      }
+    },
+    "second": {
+      "type": "column",
+      "ratio": 0.4,
+      "first": "plot-cmd",
+      "second": "plot-state"
+    },
+    "direction": "row"
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1.0
+  }
+}

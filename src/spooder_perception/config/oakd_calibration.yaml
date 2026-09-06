@@ -1,0 +1,83 @@
+# OAK-D Lite Calibration Parameters
+# These are default/placeholder values. For accurate depth, run stereo calibration.
+# See: https://github.com/luxonis/depthai-calibration
+#
+# Intrinsic parameters for OAK-D Lite (from factory calibration):
+#   Left/Right stereo cameras: 640x400, ~71° HFOV
+#   RGB camera: 1280x720, ~70° HFOV
+
+/**:
+  ros__parameters:
+    # Left camera intrinsics (640x400)
+    left_camera:
+      fx: 438.5
+      fy: 438.5
+      cx: 320.0
+      cy: 200.0
+      k1: 0.0
+      k2: 0.0
+      p1: 0.0
+      p2: 0.0
+      k3: 0.0
+
+    # Right camera intrinsics (640x400)
+    right_camera:
+      fx: 438.5
+      fy: 438.5
+      cx: 320.0
+      cy: 200.0
+      k1: 0.0
+      k2: 0.0
+      p1: 0.0
+      p2: 0.0
+      k3: 0.0
+
+    # RGB camera intrinsics (1280x720)
+    rgb_camera:
+      fx: 922.0
+      fy: 922.0
+      cx: 640.0
+      cy: 360.0
+      k1: 0.0
+      k2: 0.0
+      p1: 0.0
+      p2: 0.0
+      k3: 0.0
+
+    # Extrinsic parameters (relative positions)
+    extrinsics:
+      # Right camera relative to left camera (stereo baseline)
+      left_to_right:
+        x: 0.075
+        y: 0.0
+        z: 0.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+      # RGB camera relative to left stereo camera
+      left_to_rgb:
+        x: 0.0
+        y: 0.0
+        z: 0.005
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+    # IMU extrinsics
+    imu_to_left:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      roll: 0.0
+      pitch: 0.0
+      yaw: 0.0
+
+    # Calibration status
+    calibration_status:
+      left: "uncalibrated"
+      right: "uncalibrated"
+      rgb: "uncalibrated"
+      imu: "uncalibrated"
+    last_calibration_date: "unknown"
+    notes: "Replace with actual calibration data from depthai-calibration tool"

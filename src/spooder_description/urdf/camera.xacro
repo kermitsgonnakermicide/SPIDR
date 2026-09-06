@@ -1,8 +1,9 @@
 <?xml version="1.0"?>
+<!-- @deprecated Use gazebo_oakd.plugin.xacro instead. This generic depth camera
+     is kept for backward compatibility but does not match OAK-D Lite hardware specs. -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <xacro:macro name="depth_camera" params="parent_link origin_xyz origin_rpy">
-    
     <!-- Camera Link -->
     <joint name="camera_joint" type="fixed">
       <parent link="${parent_link}"/>

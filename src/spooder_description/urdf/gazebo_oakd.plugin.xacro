@@ -1,0 +1,167 @@
+<?xml version="1.0"?>
+<!--
+  Gazebo Harmonic OAK-D Lite Plugin
+
+  Simulates the OAK-D Lite stereo depth camera with parameters matching hardware:
+    - Stereo baseline: 7.5 cm
+    - Horizontal FOV: ~71 degrees
+    - Vertical FOV: ~50 degrees
+    - Depth range: 0.2 - 10.0 meters
+    - Resolution: 640x400 (depth), 1280/720 (RGB)
+
+  IMPORTANT - Frame convention:
+  Gazebo's depth_camera plugin publishes the point cloud in the parent link's
+  coordinate system with X = camera view direction, Y = image right, Z = image
+  up (already the parent link convention, NOT the ROS "optical" convention).
+  See: https://gazebosim.org/api/sim/8/depth_camera.html
+
+  We deliberately set `gz_frame_id` to `spooder/oak_d_base_link` (which is
+  aligned with the robot's REP 103 base_link: +X forward, +Y left, +Z up) so
+  the depth-camera data convention matches the link convention — no extra
+  optical rotation needed for downstream consumers (RViz, octomap_server).
+
+  Published topics (gz:ros via bridge):
+    /oak_d/points        - PointCloud2 (depth point cloud), frame: oak_d_base_link
+    /oak_d/depth/image   - Depth image,                   frame: oak_d_base_link
+    /oak_d/rgb/image     - RGB image,                     frame: oak_d_base_link
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Gazebo OAK-D Lite Sensor Plugin for Simulation -->
+  <xacro:macro name="gazebo_oakd_sensor" params="parent_link origin_xyz origin_rpy">
+
+    <!-- Base frame for OAK-D sensor. Axes are aligned with the robot base_link
+         so that Gazebo's depth-camera data is already in a usable convention
+         (X=forward depth, Y=lateral, Z=vertical).
+         The caller can supply origin_rpy to tilt the camera down for ground-
+         plane visibility (the default use here is origin_rpy = "0 0 0"; the
+         DOWNWARD TILT is applied inside the sensor <pose> tag below so it does
+         not conflict with whatever mount orientation the caller passes). -->
+    <joint name="oak_d_joint" type="fixed">
+      <parent link="${parent_link}"/>
+      <child link="oak_d_base_link"/>
+      <origin xyz="${origin_xyz}" rpy="${origin_rpy}"/>
+   </joint>
+
+    <link name="oak_d_base_link">
+      <visual>
+        <geometry>
+          <box size="0.035 0.045 0.015"/>
+        </geometry>
+        <material name="oakd_dark">
+          <color rgba="0.15 0.15 0.15 1"/>
+       </material>
+     </visual>
+      <collision>
+        <geometry>
+          <box size="0.035 0.045 0.015"/>
+       </geometry>
+     </collision>
+      <inertial>
+        <mass value="0.05"/>
+        <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+     </inertial>
+   </link>
+
+    <!-- Left grayscale camera (stereo pair, +Y direction = robot's left since
+         base_link uses REP 103 with +Y left). -->
+    <joint name="oak_d_left_camera_joint" type="fixed">
+      <parent link="oak_d_base_link"/>
+      <child link="oak_d_left_camera_link"/>
+      <origin xyz="0 0.0375 0" rpy="0 0 0"/>
+   </joint>
+
+    <link name="oak_d_left_camera_link"/>
+
+    <!-- Right grayscale camera (stereo pair, 7.5 cm baseline to the right). -->
+    <joint name="oak_d_right_camera_joint" type="fixed">
+      <parent link="oak_d_base_link"/>
+      <child link="oak_d_right_camera_link"/>
+      <origin xyz="0 -0.0375 0" rpy="0 0 0"/>
+   </joint>
+
+    <link name="oak_d_right_camera_link"/>
+
+    <!-- RGB camera (offset from stereo pair along +Z to match hardware layout). -->
+    <joint name="oak_d_rgb_camera_joint" type="fixed">
+      <parent link="oak_d_base_link"/>
+      <child link="oak_d_rgb_camera_link"/>
+      <origin xyz="0 0 0.008" rpy="0 0 0"/>
+   </joint>
+
+    <link name="oak_d_rgb_camera_link"/>
+
+    <!-- Gazebo depth camera plugin.
+         Sensor pose (in oak_d_base_link coordinates): pitch -20deg around Y so
+         the camera looks down-and-forward — at its 24 cm mount height it sees
+         roughly the floor from ~0.7 m in front up to the horizon.
+
+         `gz_frame_id` is set to `spooder/oak_d_base_link` (with frame_prefix
+         applied). The data convention matches because oak_d_left_camera_joint
+         has rpy=0, so the parent link axes equal the OAK-D base axes (X
+         forward, Y left, Z up). Gazebo depth-camera data convention (X view-
+         direction, Y image-right, Z image-up in parent frame) aligns with
+         REP 103 base axes here. -->
+    <gazebo reference="oak_d_left_camera_link">
+      <sensor name="oak_d_depth_camera" type="depth_camera">
+        <update_rate>30</update_rate>
+        <topic>/oak_d</topic>
+        <gz_frame_id>spooder/oak_d_base_link</gz_frame_id>
+        <pose>0 0 0 0 -0.349 0</pose>  <!-- pitch -20deg downward tilt -->
+
+        <camera>
+          <horizontal_fov>1.239</horizontal_fov>  <!-- ~71 degrees -->
+          <vertical_fov>0.873</vertical_fov>     <!-- ~50 degrees -->
+          <image>
+            <width>640</width>
+            <height>400</height>
+            <format>R8G8B8</format>
+         </image>
+          <clip>
+            <near>0.2</near>
+            <far>10.0</far>
+         </clip>
+          <depth_camera>
+            <clip>
+              <near>0.2</near>
+              <far>10.0</far>
+           </clip>
+         </depth_camera>
+       </camera>
+
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+     </sensor>
+   </gazebo>
+
+    <!-- RGB camera for visualization, mounted on the same stereo pair so its
+         pose matches the depth camera. -->
+    <gazebo reference="oak_d_left_camera_link">
+      <sensor name="oak_d_rgb_camera" type="camera">
+        <update_rate>30</update_rate>
+        <topic>/oak_d/rgb</topic>
+        <gz_frame_id>spooder/oak_d_base_link</gz_frame_id>
+        <pose>0 0 0 0 -0.349 0</pose>  <!-- match depth camera tilt -->
+
+        <camera>
+          <horizontal_fov>1.221</horizontal_fov>  <!-- ~70 degrees -->
+          <vertical_fov>0.873</vertical_fov>     <!-- ~50 degrees -->
+          <image>
+            <width>1280</width>
+            <height>720</height>
+            <format>R8G8B8</format>
+         </image>
+          <clip>
+            <near>0.1</near>
+            <far>100.0</far>
+         </clip>
+       </camera>
+
+        <always_on>1</always_on>
+        <visualize>false</visualize>
+     </sensor>
+   </gazebo>
+
+ </xacro:macro>
+
+</robot>

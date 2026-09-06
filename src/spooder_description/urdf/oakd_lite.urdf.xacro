@@ -1,0 +1,186 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- OAK-D LITE Stereo Depth Camera (with IMU and RGB)
+       Dimensions:
+         - Baseline (inter-camera distance): 7.5 cm
+         - Horizontal FOV: ~71 degrees
+         - Vertical FOV: ~50 degrees
+         - Depth range: 0.2 - 10.0 meters
+         - Resolution: 640x400 (depth), 1280/720 (RGB)
+         - IMU: 3-axis accelerometer + 3-axis gyro
+
+       TF tree:
+         spooder/base_link
+           └─ oak_d_base_frame
+               ├─ oak_d_left_camera → oak_d_left_camera_optical
+               ├─ oak_d_right_camera → oak_d_right_camera_optical
+               ├─ oak_d_rgb_camera → oak_d_rgb_camera_optical
+               └─ oak_d_imu
+
+       Topics published by depthai_ros_driver:
+         - /oak_d/points (PointCloud2 from stereo depth)
+         - /oak_d/depth (Depth image)
+         - /oak_d/color (RGB image)
+         - /oak_d/imu (Imu message)
+  -->
+
+  <!-- Left Camera -->
+  <xacro:macro name="oakd_left_camera" params="parent origin_xyz origin_rpy">
+    <link name="oak_d_left_camera_link">
+      <visual>
+        <geometry>
+          <box size="0.01 0.01 0.01"/>
+        </geometry>
+        <material name="camera_left_blue">
+          <color rgba="0.0 0.2 0.8 1"/>
+        </material>
+      </visual>
+      <inertial>
+        <mass value="0.01"/>
+        <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+      </inertial>
+    </link>
+
+    <joint name="oak_d_left_camera_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="oak_d_left_camera_link"/>
+      <origin xyz="${origin_xyz}" rpy="${origin_rpy}"/>
+    </joint>
+
+    <link name="oak_d_left_camera_optical">
+      <visual>
+        <geometry>
+          <box size="0.01 0.01 0.01"/>
+        </geometry>
+      </visual>
+    </link>
+
+    <joint name="oak_d_left_camera_optical_joint" type="fixed">
+      <parent link="oak_d_left_camera_link"/>
+      <child link="oak_d_left_camera_optical"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Right Camera -->
+  <xacro:macro name="oakd_right_camera" params="parent origin_xyz origin_rpy">
+    <link name="oak_d_right_camera_link">
+      <visual>
+        <geometry>
+          <box size="0.01 0.01 0.01"/>
+        </geometry>
+        <material name="camera_right_red">
+          <color rgba="0.8 0.2 0.0 1"/>
+        </material>
+      </visual>
+      <inertial>
+        <mass value="0.01"/>
+        <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+      </inertial>
+    </link>
+
+    <joint name="oak_d_right_camera_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="oak_d_right_camera_link"/>
+      <origin xyz="${origin_xyz}" rpy="${origin_rpy}"/>
+    </joint>
+
+    <link name="oak_d_right_camera_optical">
+      <visual>
+        <geometry>
+          <box size="0.01 0.01 0.01"/>
+        </geometry>
+      </visual>
+    </link>
+
+    <joint name="oak_d_right_camera_optical_joint" type="fixed">
+      <parent link="oak_d_right_camera_link"/>
+      <child link="oak_d_right_camera_optical"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- RGB Camera -->
+  <xacro:macro name="oakd_rgb_camera" params="parent origin_xyz origin_rpy">
+    <link name="oak_d_rgb_camera_link">
+      <visual>
+        <geometry>
+          <box size="0.015 0.015 0.01"/>
+        </geometry>
+        <material name="camera_rgb_orange">
+          <color rgba="1.0 0.5 0.0 1"/>
+        </material>
+      </visual>
+      <inertial>
+        <mass value="0.02"/>
+        <inertia ixx="0.00002" ixy="0" ixz="0" iyy="0.00002" iyz="0" izz="0.00002"/>
+      </inertial>
+    </link>
+
+    <joint name="oak_d_rgb_camera_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="oak_d_rgb_camera_link"/>
+      <origin xyz="${origin_xyz}" rpy="${origin_rpy}"/>
+    </joint>
+
+    <link name="oak_d_rgb_camera_optical">
+      <visual>
+        <geometry>
+          <box size="0.015 0.015 0.01"/>
+        </geometry>
+      </visual>
+    </link>
+
+    <joint name="oak_d_rgb_camera_optical_joint" type="fixed">
+      <parent link="oak_d_rgb_camera_link"/>
+      <child link="oak_d_rgb_camera_optical"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- IMU Sensor -->
+  <xacro:macro name="oakd_imu" params="parent origin_xyz origin_rpy">
+    <link name="oak_d_imu_link">
+      <visual>
+        <geometry>
+          <box size="0.02 0.02 0.02"/>
+        </geometry>
+        <material name="sensor_green">
+          <color rgba="0.0 0.8 0.0 1"/>
+        </material>
+      </visual>
+      <inertial>
+        <mass value="0.05"/>
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+      </inertial>
+    </link>
+
+    <joint name="oak_d_imu_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="oak_d_imu_link"/>
+      <origin xyz="${origin_xyz}" rpy="${origin_rpy}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Base Frame for OAK-D (TF parent for all sub-devices) -->
+  <xacro:macro name="oakd_base_frame" params="parent origin_xyz origin_rpy">
+    <link name="oak_d_base_frame">
+      <visual>
+        <geometry>
+          <box size="0.005 0.005 0.005"/>
+        </geometry>
+        <material name="sensor_white">
+          <color rgba="0.9 0.9 0.9 1"/>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="oak_d_base_frame_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="oak_d_base_frame"/>
+      <origin xyz="${origin_xyz}" rpy="${origin_rpy}"/>
+    </joint>
+  </xacro:macro>
+
+</robot>

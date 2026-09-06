@@ -1,0 +1,39 @@
+# OAK-D Lite Simulation Configuration
+# Maps Gazebo depth camera topics to match the real hardware topic interface.
+# The Gazebo plugin publishes:
+#   /oak_d/points        -> PointCloud2 (from depth camera)
+#   /oak_d/rgb/image    -> RGB image
+#   /camera/camera_info -> Camera info
+#
+# This config remaps those to match what depthai_ros_driver would publish.
+
+/**:
+  ros__parameters:
+    # Topic remapping for simulation
+    cloud_in: '/oak_d/points'
+    depth_in: '/oak_d/depth/image'
+    rgb_in: '/oak_d/rgb/image'
+
+    # Simulation camera parameters (matches Gazebo plugin)
+    resolution:
+      width: 640
+      height: 400
+    fov:
+      horizontal: 1.239  # ~71 degrees
+      vertical: 0.873    # ~50 degrees
+    range:
+      min: 0.2
+      max: 10.0
+    baseline: 0.075  # 7.5 cm (OAK-D Lite stereo baseline)
+
+    # Sim time compatibility
+    use_sim_time: true
+
+    # Point cloud processing for OctoMap
+    voxel_size: 0.05
+    range_min: 0.2
+    range_max: 8.0
+    max_output_points: 120000
+
+    # Decimation for performance
+    decimation: 1

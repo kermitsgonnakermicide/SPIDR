@@ -2,10 +2,10 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>spooder_perception</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="daksh.vohra1@gmail.com">daksh</maintainer>
-  <license>TODO: License declaration</license>
+  <version>0.1.0</version>
+  <description>OAK-D Lite perception pipeline for Spooder hexapod robot. Handles camera driver, point cloud processing, terrain analysis, and OctoMap integration.</description>
+  <maintainer email="daksh.vohra1@gmail.com">Daksh Vohra</maintainer>
+  <license>MIT</license>
 
   <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
@@ -15,8 +15,9 @@
   <depend>geometry_msgs</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_sensor_msgs</depend>
-  <exec_depend>octomap_msgs</exec_depend>
-  <exec_depend>octomap_server</exec_depend>
+  <depend>octomap_msgs</depend>
+  <depend>octomap_server</depend>
+  <depend>depthai_ros_driver</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

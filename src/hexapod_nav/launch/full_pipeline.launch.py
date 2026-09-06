@@ -12,16 +12,11 @@ def generate_launch_description():
 
     return LaunchDescription([
 
-        # --- OAK-D Camera ---
-        Node(
-            package='depthai_ros_driver',
-            executable='camera_node',
-            name='oak_d',
-            parameters=[{
-                'i_nn_type': 'none',
-                'i_enable_imu': False,
-            }]
-        ),
+        # --- OAK-D Camera (delegated to spooder_perception) ---
+        # Note: The OAK-D driver is now owned by spooder_perception.
+        # Use oakd_driver.launch.py for hardware or oakd_sim.launch.py for sim.
+        # This launch file assumes the camera is already running.
+        # See spooder_perception/launch/oakd_bringup.launch.py for unified bringup.
 
         # --- OctoMap Server ---
         Node(

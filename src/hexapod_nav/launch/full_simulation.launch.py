@@ -16,6 +16,11 @@ Usage:
   ros2 launch hexapod_nav full_simulation.launch.py
   ros2 launch hexapod_nav full_simulation.launch.py world:=foothold_terrain spawn_x:=1.0
   ros2 launch hexapod_nav full_simulation.launch.py spawn_z:=3.0
+
+@deprecated Since the project went lidar-free, prefer the canonical entry at the
+  workspace root:  scripts/run_oakd_lite.sh sim
+  or its two ergonomic wrappers:    start_no_lidar.sh    start_foxglove.sh
+  This launch still works but includes the legacy SLAM Toolbox (lidar-based).
 """
 import os
 from ament_index_python.packages import get_package_share_directory
@@ -57,6 +62,12 @@ def generate_launch_description():
         }.items(),
     )
 
+    # -- 1a. removed (was /cmd_vel -> /cmd_vel_nav relay, no consumer) -------
+    # The relay was added when rerun_bridge was believed to need /cmd_vel_nav.
+    # Verified Sep 2026: no node subscribes ONLY to /cmd_vel_nav — both
+    # rerun_bridge.py copies subscribe to /cmd_vel as well, and
+    # gait_controller_node.py subscribes to /cmd_vel directly. Dead code.
+
     # -- 2. Robot Spawn + Controllers + EKF --------------------------------
     robot_spawn = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -91,7 +102,7 @@ def generate_launch_description():
             os.path.join(pkg_hex, 'config', 'octomap_params.yaml'),
             {'use_sim_time': use_sim_time},
         ],
-        remappings=[('cloud_in', '/camera/points')],
+        remappings=[('cloud_in', '/oak_d/points')],
         output='screen',
     )
 

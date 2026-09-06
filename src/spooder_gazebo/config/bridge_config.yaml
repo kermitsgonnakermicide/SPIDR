@@ -1,7 +1,10 @@
 # Fallback bridge config for launch files that do not generate their own config.
 # 01_sim_world.launch.py writes a world-specific version at runtime.
+# NOTE: There is intentionally NO leading "---" doc separator here.
+# ros_gz_bridge uses YAML::Load() which treats a top-level sequence with a
+# leading "---" oddly (depends on yaml-cpp version). Removing it keeps the
+# parse path identical across yaml-cpp versions and avoids duplicate bridges.
 
----
 # CLOCK - default test_world fallback
 - ros_topic_name: "/clock"
   gz_topic_name: "/world/test_world/clock"
@@ -54,6 +57,48 @@
 # DEPTH CAMERA - Camera Info
 - ros_topic_name: "/camera/camera_info"
   gz_topic_name: "/camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+# OAK-D LITE - Left camera image (stereo pair)
+- ros_topic_name: "/oak_d/left/image"
+  gz_topic_name: "/oak_d/left/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# OAK-D LITE - Right camera image (stereo pair)
+- ros_topic_name: "/oak_d/right/image"
+  gz_topic_name: "/oak_d/right/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# OAK-D LITE - RGB camera image
+- ros_topic_name: "/oak_d/rgb/image"
+  gz_topic_name: "/oak_d/rgb/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# OAK-D LITE - Depth image
+- ros_topic_name: "/oak_d/depth/image"
+  gz_topic_name: "/oak_d/depth/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# OAK-D LITE - Point cloud (from Gazebo depth camera)
+- ros_topic_name: "/oak_d/points"
+  gz_topic_name: "/oak_d/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# OAK-D LITE - Camera info
+- ros_topic_name: "/oak_d/camera_info"
+  gz_topic_name: "/oak_d/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
   gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS

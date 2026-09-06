@@ -2,8 +2,14 @@
 Simulation launch for hexapod_nav.
 
 Assumes the base Gazebo simulation (world, robot spawn, controllers, EKF, SLAM)
-is already running from start_spooder.sh. This launches only the hexapod_nav
-OctoMap + terrain pipeline on top.
+is already running (e.g. via start_no_lidar.sh). This launches only the
+hexapod_nav OctoMap + terrain pipeline on top.
+
+Topic wiring note:
+  Nav2 collision_monitor publishes -> /cmd_vel
+  gait_controller_node subscribes to /cmd_vel directly (one canonical topic;
+  legacy controller, unstuck_monitor, hexapod_nav_cpp, rerun_bridge all use
+  the same name).
 """
 import os
 from ament_index_python.packages import get_package_share_directory
@@ -21,7 +27,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
 
-        # --- OctoMap Server (subscribes to /camera/points from Gazebo depth camera) ---
+        # --- OctoMap Server (subscribes to /oak_d/points from Gazebo OAK-D camera) ---
         TimerAction(period=2.0, actions=[
             Node(
                 package='octomap_server',
@@ -32,7 +38,7 @@ def generate_launch_description():
                     {'use_sim_time': use_sim_time}
                 ],
                 remappings=[
-                    ('cloud_in', '/camera/points'),
+                    ('cloud_in', '/oak_d/points'),
                 ],
                 output='screen'
             )
